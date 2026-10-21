@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EsmPay — Interactive Prototype</title>
+<link rel="stylesheet" href="assets/ui.css">
+<style>
+/* Tokens, reset, top bar, chips, buttons, forms come from assets/ui.css (docs/17-design-system.md).
+   Everything below is scoped to the demo stage or to a device frame. */
+.top .brand{width:auto;padding:0 22px 0 18px}
+.top{padding-right:20px}
+.tips{background:var(--surface);border-bottom:1px solid var(--line);padding:10px 28px;font-size:13px;color:var(--muted);display:flex;gap:28px;flex-wrap:wrap}
+.tips>span{display:flex;align-items:center;gap:9px}
+.tips i{font-style:normal;width:18px;height:18px;border-radius:50%;background:var(--brand-50);color:var(--brand);display:grid;place-items:center;font-size:11px;font-weight:700;flex-shrink:0}
+.tips b{color:var(--ink);font-weight:600}
+.stage{display:flex;gap:40px;justify-content:center;align-items:flex-start;padding:28px 28px 56px;flex-wrap:wrap;max-width:none;flex:none}
+.col>h2{font-size:11px;font-weight:650;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin:0 0 12px 4px}
+
+/* ---------- parent web app (phone frame) ---------- */
+.phone{width:372px;height:780px;background:#0f172a;border-radius:42px;padding:10px;box-shadow:0 24px 48px -12px rgba(16,24,40,.28),0 0 0 1px rgba(16,24,40,.08)}
+.screen{width:100%;height:100%;background:var(--bg);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;position:relative}
+.statusbar{height:30px;display:flex;justify-content:space-between;align-items:center;padding:0 22px;font-size:12px;font-weight:600;color:var(--ink)}
+.appbar{padding:6px 16px 12px;display:flex;align-items:center;gap:10px}
+.screen .logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#17a37f,#0b6b53);color:#fff;display:grid;place-items:center;font-weight:800;font-size:14px;flex-shrink:0}
+.appbar .sch{flex:1;line-height:1.2}
+.appbar .sch b{display:block;font-size:14px;font-weight:650;letter-spacing:-.01em}
+.appbar .sch span{font-size:11.5px;color:var(--muted)}
+.screen .avatar{width:30px;height:30px;margin:0;border-radius:50%;background:var(--ink);color:#fff;font-weight:650;font-size:11px}
+.content{flex:1;overflow-y:auto;padding:2px 16px 16px;scrollbar-width:none}
+.content::-webkit-scrollbar{display:none}
+.nav{display:flex;border-top:1px solid var(--line);background:var(--surface);padding:6px 8px 14px}
+.nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:550;color:var(--faint);padding:6px 0;position:relative}
+.nav button svg{width:21px;height:21px;stroke-width:1.75}
+.nav button:hover{color:var(--muted)}
+.nav button.on{color:var(--brand);font-weight:650}
+.nav button.on::before{content:"";position:absolute;top:-7px;left:30%;right:30%;height:2px;border-radius:0 0 2px 2px;background:var(--brand)}
+.kids{display:flex;gap:8px;margin:2px 0 14px}
+.kid{padding:6px 14px;border-radius:99px;background:var(--surface);border:1px solid var(--line);font-size:13px;font-weight:600;color:var(--muted)}
+.kid:hover{border-color:#d3d8df;color:var(--ink)}
+.kid.on{background:var(--brand-50);color:var(--brand);border-color:var(--brand)}
+
+.screen .card{padding:14px 16px;margin-bottom:12px}
+.screen .card h3{font-size:13px;margin-bottom:10px}
+.hello{font-size:20px;font-weight:650;letter-spacing:-.02em;line-height:1.2;margin:4px 2px 14px}
+.hello small{display:block;font-size:13px;font-weight:450;color:var(--muted);margin-top:3px;letter-spacing:0}
+
+/* fee summary */
+.fee .row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.fee .nm{font-size:14px;font-weight:650;letter-spacing:-.01em}
+.fee .meta{font-size:12px;color:var(--muted);margin-top:2px}
+.fee .amt{font-size:30px;font-weight:650;letter-spacing:-.03em;line-height:1.1;margin:16px 0 3px}
+.fee .lbl{font-size:12px;color:var(--muted)}
+.fee .btn{margin-top:14px}
+.bar{height:6px;background:var(--line-2);border-radius:99px;overflow:hidden;margin:14px 0 6px}
+.bar>i{display:block;height:100%;background:var(--brand);border-radius:99px}
+.bar.dark{margin:12px 0 4px}
+
+.screen .btn{width:100%;height:42px;border-radius:10px;font-size:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;text-align:left;box-shadow:var(--shadow)}
+.tile:hover{border-color:#d3d8df}
+.tile b{display:block;font-size:13px;font-weight:650;margin-top:10px}
+.tile span{font-size:12px;color:var(--muted)}
+.tile .ic{width:30px;height:30px;border-radius:8px;background:var(--brand-50);color:var(--brand);display:grid;place-items:center}
+.tile .ic svg{width:16px;height:16px}
+
+/* progress insight (AI, teacher-approved) */
+.pi{border-left:3px solid var(--faint)}
+.pi.warn{border-left-color:#e0a100}.pi.ok{border-left-color:#22a45d}
+.pi .hd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.pi .hd .eyebrow{margin:0}
+.pi p{font-size:13.5px;line-height:1.55;color:var(--ink-2)}
+.pi .why{margin-top:12px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pi .why button.chip{cursor:pointer}
+.pi .why button.chip:hover{border-color:#cfd4dc;color:var(--ink-2)}
+.pi .ev{margin-top:10px;padding:8px 10px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:8px;font-size:12px;color:var(--muted);line-height:1.5}
+
+.kv.tot{font-weight:650}
+.kv.tot>span:first-child{color:var(--ink)}
+.hist{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line-2)}
+.hist:last-child{border:0}
+.hist .l{flex:1;font-size:13px}.hist .l small{display:block;color:var(--muted);font-size:12px;margin-top:1px}
+.hist .r{font-weight:650;font-size:13.5px}
+.subj{padding:11px 0;border-bottom:1px solid var(--line-2)}
+.subj:last-child{border:0;padding-bottom:2px}
+.subj .t{display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:8px;align-items:center;gap:8px}
+.track{position:relative;height:6px;background:var(--line-2);border-radius:99px}
+.track i{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:var(--brand)}
+.track u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);border-radius:2px}
+.subj small{font-size:11.5px;color:var(--muted);display:block;margin-top:6px}
+.stat3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.stat3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 8px 10px;text-align:center;box-shadow:var(--shadow)}
+.stat3 b{display:block;font-size:20px;font-weight:650;letter-spacing:-.02em;line-height:1.2}
+.stat3 span{font-size:12px;color:var(--muted)}
+.cal{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.cal .h{font-size:10.5px;font-weight:650;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);text-align:center;margin-bottom:2px}
+.cal .d{aspect-ratio:1;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:600;background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-line)}
+.cal .d.a{background:var(--bad-bg);color:var(--bad);border-color:var(--bad-line)}
+.cal .d.l{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-line)}
+.cal .d.f{background:var(--surface-2);color:var(--faint);border-color:var(--line-2)}
+.screen .legend{flex-direction:row;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--muted);margin-top:12px}
+.screen .legend i{margin-right:6px}
+.legend i.ok{background:#22a45d}.legend i.bad{background:#d92d20}.legend i.warn{background:#e0a100}.legend i.off{background:#cfd5dc}
+
+/* forms */
+.screen .field input,.screen .field select{width:100%;height:42px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:15px;outline:none;box-shadow:var(--shadow)}
+.screen .field input:focus,.screen .field select:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-50)}
+.screen .seg{display:flex;width:100%;margin-bottom:14px}
+.screen .seg button{flex:1;padding:8px 6px;font-size:13px}
+.center{text-align:center}
+.big-ic{width:64px;height:64px;border-radius:50%;margin:14px auto 14px;display:grid;place-items:center}
+.big-ic.ok{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-line)}
+.big-ic.bad{background:var(--bad-bg);color:var(--bad);border:1px solid var(--bad-line)}
+.big-ic svg{width:30px;height:30px}
+.spin{width:44px;height:44px;border-radius:50%;border:4px solid var(--brand-50);border-top-color:var(--brand);margin:22px auto 16px;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:3s}}
+.toggle{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line-2);font-size:14px;cursor:pointer}
+.toggle:last-child{border:0}
+.menu-row{display:flex;align-items:center;gap:12px;padding:13px 2px;border-bottom:1px solid var(--line-2);font-size:14px;font-weight:550;width:100%;text-align:left}
+.menu-row span{flex:1}.menu-row small{color:var(--faint);font-weight:500;font-size:13px}
+.menu-row:hover{color:var(--brand)}
+.back{font-size:13px;color:var(--brand);font-weight:600;margin:2px 0 10px;display:inline-block}
+.login{padding:28px 22px;display:flex;flex-direction:column;flex:1;justify-content:center}
+.screen .login .logo{width:48px;height:48px;border-radius:12px;font-size:22px;margin-bottom:18px}
+.login h2{font-size:22px;font-weight:650;letter-spacing:-.02em;margin-bottom:6px}
+.login p{color:var(--muted);font-size:13.5px;margin-bottom:22px;line-height:1.5}
+.screen .toast{position:absolute;left:16px;right:16px;bottom:84px;max-width:none;transform:translateY(10px);padding:11px 14px;border-radius:10px;font-size:13px}
+.screen .toast.show{transform:none}
+
+/* ---------- feature phone (USSD) ---------- */
+.feature{width:292px;background:#1e2530;border:1px solid #2d3644;border-radius:32px 32px 52px 52px;padding:20px 18px 24px;box-shadow:0 24px 48px -12px rgba(16,24,40,.3)}
+.brand-row{display:flex;justify-content:space-between;color:#7d8da1;font-size:10.5px;font-weight:600;letter-spacing:.14em;margin-bottom:10px}
+.lcd{background:#b9cfa3;border-radius:8px;border:3px solid #0b0f15;padding:12px;height:236px;font-family:var(--mono);font-size:13px;line-height:1.35;color:#16210f;white-space:pre-wrap;overflow:hidden;box-shadow:inset 0 2px 8px rgba(0,0,0,.28);position:relative}
+.lcd .cnt{position:absolute;right:8px;bottom:5px;font-size:10px;opacity:.6}
+.lcd .idle{opacity:.55}
+.ussd-in{display:flex;gap:8px;margin:12px 0}
+.ussd-in input{flex:1;min-width:0;height:36px;padding:0 10px;border-radius:8px;border:0;background:#0b0f15;color:#cde8b6;font-family:var(--mono);font-size:15px;outline:none;letter-spacing:2px}
+.ussd-in input:focus-visible{outline:2px solid #2bc79b;outline-offset:0}
+.ussd-in button{background:var(--brand);color:#fff;border-radius:8px;padding:0 14px;font-weight:600;font-size:13px}
+.ussd-in button:hover{background:#0d7a5f}
+.dial{display:flex;gap:8px;margin-bottom:12px}
+.dial button{flex:1;height:36px;border-radius:8px;font-weight:600;font-size:13px;color:#fff}
+.dial .call{background:#15803d}.dial .call:hover{background:#16903f}
+.dial .end{background:#b42318}.dial .end:hover{background:#c52a1d}
+.dial button[disabled]{opacity:.35;cursor:not-allowed}
+.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.keys button{background:#2a3340;color:#e8eef5;border-radius:9px;height:40px;font-size:15px;font-weight:550}
+.keys button:hover{background:#364152}
+.sess{font-size:11px;color:#7d8da1;text-align:center;margin-top:10px;min-height:14px}
+
+/* ---------- parent's phone: MoMo prompt + SMS ---------- */
+.notif{width:340px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;box-shadow:var(--shadow)}
+.panel h4{font-size:11px;font-weight:650;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin-bottom:10px;display:flex;justify-content:space-between}
+.panel.momo{background:var(--warn-bg);border-color:var(--warn-line);border-left:3px solid #e0a100}
+.momo .t{font-weight:650;font-size:13.5px;margin-bottom:6px;color:#5c3b05}
+.momo p{font-size:13px;line-height:1.5;margin-bottom:12px;color:#5c3b05}
+.momo p small{color:#8a6a2a}
+.momo .acts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.momo .acts button{height:34px;border-radius:8px;font-weight:600;font-size:13px}
+.momo .ok{background:var(--brand);color:#fff}.momo .ok:hover{background:var(--brand-700)}
+.momo .no{background:var(--surface);border:1px solid var(--line);color:var(--ink-2)}
+.momo .low{grid-column:1/3;background:var(--bad-bg);color:var(--bad)}
+.sms{background:var(--surface-2);border:1px solid var(--line-2);border-radius:10px 10px 10px 3px;padding:9px 11px;margin-bottom:8px;font-size:13px;line-height:1.45;color:var(--ink-2)}
+.sms small{display:block;color:var(--faint);font-size:11px;font-weight:550;margin-bottom:3px}
+.empty{font-size:13px;color:var(--muted);padding:2px}
+@media (max-width:1180px){.stage{padding:16px}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><div class="lg">E</div><div><b>EsmPay</b><span>Parent app &amp; USSD</span></div></div>
+  <span class="chip neutral">GreenHill Academy &middot; demo tenant</span>
+  <span class="chip neutral">Mock data &middot; nothing is sent or charged</span>
+  <div class="sp"></div>
+  <a class="lk" href="staff.html">Staff consoles &rarr;</a>
+  <button class="lk" id="reset">Reset demo</button>
+</header>
+<div class="tips">
+  <span><i>1</i><span>Log in on the web app (code arrives as an SMS on the right).</span></span>
+  <span><i>2</i><span>Pay Ama's fees on <b>web</b> or by dialling <b>*714#</b> (PIN <b>4826</b>).</span></span>
+  <span><i>3</i><span>Approve the MoMo prompt in &ldquo;Parent's phone&rdquo; &mdash; both channels update together.</span></span>
+</div>
+
+<main class="stage">
+  <section class="col">
+    <h2>Parent web app (PWA)</h2>
+    <div class="phone"><div class="screen" id="app"></div></div>
+  </section>
+
+  <section class="col">
+    <h2>USSD · feature phone</h2>
+    <div class="feature">
+      <div class="brand-row"><span>MTN</span><span>▂▄▆ 4G</span></div>
+      <div class="lcd" id="lcd"></div>
+      <div class="ussd-in">
+        <input id="uin" autocomplete="off" inputmode="numeric" placeholder="Enter reply">
+        <button id="usend">Send</button>
+      </div>
+      <div class="dial">
+        <button class="call" id="udial">Dial *714#</button>
+        <button class="end" id="uhang">End</button>
+      </div>
+      <div class="keys" id="keys"></div>
+      <div class="sess" id="usess"></div>
+    </div>
+  </section>
+
+  <section class="col notif">
+    <h2>Parent's phone</h2>
+    <div class="panel" id="momo-panel"></div>
+    <div class="panel"><h4><span>SMS inbox</span><span id="smscount"></span></h4><div id="sms"></div></div>
+  </section>
+</main>
+
+<script>
+/* ============================================================
+   Mock data & shared state (web + USSD share one backend)
+   ============================================================ */
+const KID_DEFAULTS = () => ([
+  { id:'ama', name:'Ama Mensah', first:'Ama', cls:'JHS 2', code:'GHA-0231', due:'15 Nov 2026',
+    items:[{n:'Tuition',a:90000},{n:'PTA levy',a:10000},{n:'ICT',a:8000},{n:'Feeding',a:22000}], paid:60000,
+    results:{term:'Term 1 · 2026/27', published:'16 Oct 2026', position:'7 of 42',
+      remark:'Ama is a diligent and cheerful student. Needs extra practice in Mathematics.', teacher:'Mr. Boateng (Class teacher)',
+      subjects:[
+        {n:'Mathematics',s:58,prev:74,avg:61,trend:[74,66,58]},
+        {n:'English',s:81,prev:78,avg:66},{n:'Integrated Science',s:72,prev:70,avg:63},
+        {n:'Social Studies',s:76,prev:72,avg:64},{n:'ICT',s:88,prev:85,avg:70},{n:'RME',s:79,prev:80,avg:72}]},
+    att:{present:52,total:55,lastAbsent:'14 Oct', absent:[6,10],late:[9]},
+    insight:{type:'decline', text:'Ama\u2019s Maths scores have dipped in her last 3 tests (74 \u2192 66 \u2192 58). Short daily practice on fractions and ratios may help.', evidence:'Maths class tests: 74, 66, 58 \u00b7 class average 61', by:'Mr. Boateng'}},
+  { id:'kofi', name:'Kofi Mensah', first:'Kofi', cls:'Primary 5', code:'GHA-0412', due:'15 Nov 2026',
+    items:[{n:'Tuition',a:70000},{n:'PTA levy',a:10000},{n:'Feeding',a:22000}], paid:102000,
+    results:{term:'Term 1 · 2026/27', published:'16 Oct 2026', position:'3 of 38',
+      remark:'Kofi is curious and creative. Keep it up!', teacher:'Mrs. Owusu (Class teacher)',
+      subjects:[
+        {n:'Mathematics',s:84,prev:80,avg:68},{n:'English',s:77,prev:75,avg:65},{n:'Science',s:80,prev:79,avg:66},
+        {n:'Social Studies',s:72,prev:70,avg:63},{n:'Creative Arts',s:90,prev:86,avg:74}]},
+    att:{present:55,total:55,lastAbsent:'none',absent:[],late:[]},
+    insight:{type:'praise', text:'Kofi is doing very well in Creative Arts (90) and has improved in every subject since last term. Great progress!', evidence:'Creative Arts 90 vs class avg 74 \u00b7 all 5 subjects up vs Term 3', by:'Mrs. Owusu'}}
+]);
+const fresh = () => ({
+  guardian:{name:'Esi Mensah', msisdn:'+233 24 123 4567', pin:'4826', fails:0, locked:false, ch:{sms:true,whatsapp:true,email:false}, lang:'English'},
+  children:KID_DEFAULTS(),
+  payments:[
+    {id:'p1',cid:'ama',amount:40000,channel:'USSD',at:'03 Sep',receipt:'GHA-R-000081'},
+    {id:'p2',cid:'ama',amount:20000,channel:'Cash',at:'24 Sep',receipt:'GHA-R-000102'},
+    {id:'p3',cid:'kofi',amount:102000,channel:'Web',at:'01 Sep',receipt:'GHA-R-000044'}],
+  notices:[
+    {t:'Mid-term break',b:'School closes Thursday 29 Oct and resumes Monday 2 Nov.',d:'19 Oct',tag:'Announcement'},
+    {t:'Term 1 results published',b:'Results and report cards are now available for all classes.',d:'16 Oct',tag:'Academic'},
+    {t:'PTA meeting',b:'Saturday 7 Nov, 10:00 in the school hall. All parents welcome.',d:'12 Oct',tag:'Event'}],
+  sms:[], pending:null, receiptNo:124, otp:null
+});
+let S = fresh();
+const W = { route:'login', cid:'ama', pay:null, otpSent:false, toast:'' };
+const U = { active:false, st:'idle', hist:[], ctx:{}, out:'', end:false, note:'', last:0 };
+
+/* helpers */
+const $ = s => document.querySelector(s);
+const kid = id => S.children.find(k=>k.id===id);
+const total = k => k.items.reduce((a,i)=>a+i.a,0);
+const bal = k => total(k)-k.paid;
+const n2 = p => (p/100).toLocaleString('en-GH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const ghs = p => 'GHS '+n2(p);
+const clock = () => new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+const sms = text => { S.sms.unshift({text,at:clock()}); renderSMS(); };
+const avg = k => k.results.subjects.reduce((a,s)=>a+s.s,0)/k.results.subjects.length;
+const grade = s => s>=80?'A':s>=70?'B':s>=60?'C':s>=50?'D':'E';
+const gradeCls = s => s>=70?'ok':s>=60?'warn':'bad';
+const esc = t => String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const icon = {
+  home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
+  wallet:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18M16 15h2"/></svg>',
+  chart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+  menu:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
+  cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>',
+  bell:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0112 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 004 0"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>',
+  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  spark:'<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/></svg>'
+};
+
+/* ============================================================
+   Payments: MoMo prompt resolution (shared by web + USSD)
+   ============================================================ */
+function createIntent(cid, amount, msisdn, channel){
+  S.pending = { id:'pi_'+Date.now(), cid, amount, msisdn, channel };
+  renderMomo();
+  return S.pending.id;
+}
+function cancelPending(why){
+  const p = S.pending; if(!p) return;
+  S.pending = null;
+  if(W.pay && W.pay.intentId===p.id){ W.pay.step='failed'; W.pay.reason=why; }
+  renderMomo(); renderApp();
+}
+function momoResolve(outcome){
+  const p = S.pending; if(!p) return;
+  S.pending = null;
+  const k = kid(p.cid);
+  const onWeb = W.pay && W.pay.intentId===p.id;
+  if(outcome==='ok'){
+    k.paid += p.amount;
+    const rc = 'GHA-R-'+String(S.receiptNo++).padStart(6,'0');
+    S.payments.unshift({id:p.id,cid:p.cid,amount:p.amount,channel:p.channel==='ussd'?'USSD':'Web',at:'20 Oct',receipt:rc});
+    try{ /* share with staff.html (bursar dashboard) */
+      const L=JSON.parse(localStorage.getItem('esmpay.payments')||'[]');
+      L.push({cid:p.cid,amount:p.amount,channel:p.channel==='ussd'?'USSD':'Web',receipt:rc,ts:Date.now()});
+      localStorage.setItem('esmpay.payments',JSON.stringify(L));
+    }catch(e){}
+    sms(`GreenHill: Receipt ${rc}. GHS ${n2(p.amount)} received for ${k.first}. Balance GHS ${n2(bal(k))}. Thank you.`);
+    if(onWeb){ W.pay.step='done'; W.pay.receipt=rc; }
+  } else {
+    const why = outcome==='low' ? 'insufficient MoMo balance' : 'you declined the request';
+    sms(`GreenHill: Payment of GHS ${n2(p.amount)} for ${k.first} was not completed (${why}). Dial *714# or open the app to try again.`);
+    if(onWeb){ W.pay.step='failed'; W.pay.reason = why; }
+  }
+  renderMomo(); renderApp();
+}
+function renderMomo(){
+  const p = S.pending, el = $('#momo-panel');
+  if(!p){ el.className='panel'; el.innerHTML='<h4><span>MoMo prompt</span></h4><div class="empty">No payment waiting. Start a payment on the web app or USSD.</div>'; return; }
+  const k = kid(p.cid);
+  el.className='panel momo';
+  el.innerHTML = `<div class="t">MTN MoMo · Payment request</div>
+    <p>Pay <b>${ghs(p.amount)}</b> to <b>GreenHill Academy</b> for ${esc(k.first)} (${k.code})?<br><small>From ${esc(p.msisdn)} · via ${p.channel==='ussd'?'USSD':'Web'}</small></p>
+    <div class="acts"><button class="ok" data-momo="ok">Approve</button><button class="no" data-momo="no">Decline</button>
+    <button class="low" data-momo="low">Simulate: insufficient funds</button></div>`;
+}
+function renderSMS(){
+  $('#smscount').textContent = S.sms.length ? S.sms.length+' message'+(S.sms.length>1?'s':'') : '';
+  $('#sms').innerHTML = S.sms.length ? S.sms.map(m=>`<div class="sms"><small>EsmPay · ${m.at}</small>${esc(m.text)}</div>`).join('') : '<div class="empty">No messages yet.</div>';
+}
+
+/* ============================================================
+   Parent web app
+   ============================================================ */
+const go = r => { W.route=r; if(r!=='pay') W.pay=null; renderApp(); const c=$('.content'); if(c) c.scrollTop=0; };
+function toast(t){ W.toast=t; const el=$('.toast'); if(el){el.textContent=t;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2200);} }
+
+function renderApp(){
+  const app = $('#app');
+  const time = clock();
+  if(W.route==='login'||W.route==='otp'){ app.innerHTML = `<div class="statusbar"><span>${time}</span><span>● ● ●</span></div>${loginView()}`; bindLogin(); return; }
+  const k = kid(W.cid);
+  let body='';
+  switch(W.route){
+    case 'home': body=homeView(k); break;
+    case 'fees': body=feesView(k); break;
+    case 'pay': body=payView(k); break;
+    case 'results': body=resultsView(k); break;
+    case 'attendance': body=attView(k); break;
+    case 'notices': body=noticesView(); break;
+    case 'more': body=moreView(); break;
+    case 'settings': body=settingsView(); break;
+  }
+  const navOn = r => ({home:'home',fees:'fees',pay:'fees',results:'results',more:'more',attendance:'more',notices:'more',settings:'more'}[W.route]===r?'on':'');
+  app.innerHTML = `<div class="statusbar"><span>${time}</span><span>● ● ●</span></div>
+    <div class="appbar"><div class="logo">G</div><div class="sch"><b>GreenHill Academy</b><span>Parent portal</span></div><div class="avatar">EM</div></div>
+    <div class="content">
+      ${['home','fees','results','attendance'].includes(W.route)?`<div class="kids">${S.children.map(c=>`<button class="kid ${c.id===W.cid?'on':''}" data-kid="${c.id}">${c.first}</button>`).join('')}</div>`:''}
+      ${body}
+    </div>
+    <div class="toast"></div>
+    <nav class="nav">
+      <button class="${navOn('home')}" data-go="home">${icon.home}Home</button>
+      <button class="${navOn('fees')}" data-go="fees">${icon.wallet}Fees</button>
+      <button class="${navOn('results')}" data-go="results">${icon.chart}Results</button>
+      <button class="${navOn('more')}" data-go="more">${icon.menu}More</button>
+    </nav>`;
+  bindPay();
+}
+
+function loginView(){
+  if(W.route==='login') return `<div class="login"><div class="logo">G</div><h2>Welcome back</h2>
+    <p>Enter the phone number your school has on file. We'll send a one-time code by SMS or WhatsApp.</p>
+    <div class="field"><label>Phone number</label><input id="lg-phone" value="024 123 4567" inputmode="tel"></div>
+    <button class="btn" id="lg-send">Send code</button>
+    <p class="note" style="margin-top:16px">No smartphone? Dial <b>*714#</b> from any phone to pay fees and check results.</p></div>`;
+  return `<div class="login"><div class="logo">G</div><h2>Enter your code</h2>
+    <p>We sent a 6-digit code to 024 123 4567. <span style="color:var(--brand);font-weight:600">(Demo: see the SMS inbox on the right →)</span></p>
+    <div class="field"><label>6-digit code</label><input id="lg-code" inputmode="numeric" maxlength="6" placeholder="••••••" style="letter-spacing:6px;font-size:20px"></div>
+    <p id="lg-err" class="note" style="color:var(--danger);min-height:18px;margin-bottom:8px"></p>
+    <button class="btn" id="lg-verify">Verify &amp; continue</button>
+    <button class="back" id="lg-back" style="margin-top:14px">← Use a different number</button></div>`;
+}
+function bindLogin(){
+  const s=$('#lg-send'); if(s) s.onclick=()=>{ S.otp=String(Math.floor(100000+Math.random()*900000)); sms(`Your EsmPay code is ${S.otp}. Valid for 5 minutes. Never share it.`); W.route='otp'; renderApp(); };
+  const v=$('#lg-verify'); if(v) v.onclick=()=>{ if($('#lg-code').value.trim()===S.otp){ go('home'); } else $('#lg-err').textContent='That code is not right. Check the SMS and try again.'; };
+  const b=$('#lg-back'); if(b) b.onclick=()=>go('login');
+}
+
+function feeStatus(k){ const b=bal(k); return b<=0?['Paid in full','ok']:k.paid>0?['Part paid','warn']:['Unpaid','bad']; }
+function homeView(k){
+  const b=bal(k), pct=Math.round(k.paid/total(k)*100), [st,stc]=feeStatus(k), ins=k.insight, decl=ins.type==='decline';
+  return `<div class="hello">Good morning, Esi<small>Here's how ${k.first} is doing</small></div>
+  <div class="card fee"><div class="row"><div><div class="nm">${k.name}</div><div class="meta">${k.cls} · ${k.code}</div></div><span class="chip ${stc}">${st}</span></div>
+    <div class="amt">${b>0?ghs(b):'All clear'}</div><div class="lbl">${b>0?'Balance due by '+k.due:'No fees outstanding this term'}</div>
+    <div class="bar"><i style="width:${pct}%"></i></div><div class="lbl">${ghs(k.paid)} of ${ghs(total(k))} paid</div>
+    ${b>0?`<button class="btn" data-go="pay">Pay fees now</button>`:''}</div>
+  <div class="grid2">
+    <button class="tile" data-go="results"><div class="ic">${icon.chart}</div><b>Results</b><span>${k.results.term} · ${grade(avg(k))} avg</span></button>
+    <button class="tile" data-go="attendance"><div class="ic">${icon.cal}</div><b>Attendance</b><span>${k.att.present}/${k.att.total} days present</span></button>
+  </div>
+  <div class="card pi ${decl?'warn':'ok'}"><div class="hd"><span class="eyebrow">Progress insight</span><span class="chip ${decl?'warn':'ok'}">${decl?'Needs attention':'Good news'}</span></div>
+    <p>${esc(ins.text)}</p>
+    <div class="why"><span>Reviewed by ${ins.by}</span><button class="chip neutral" data-why="1">Why am I seeing this?</button></div>
+    <div id="why-box" class="ev" style="display:none"><b>Evidence:</b> ${esc(ins.evidence)}.<br>AI-assisted summaries are checked by your child's teacher before they reach you.</div></div>
+  <div class="card"><h3>Latest from school</h3><div class="hist" style="padding-top:0"><div class="l"><b>${S.notices[0].t}</b><small>${S.notices[0].b}</small></div></div>
+    <button class="back" style="margin:8px 0 0" data-go="notices">See all notices →</button></div>`;
+}
+function feesView(k){
+  const b=bal(k), pct=Math.round(k.paid/total(k)*100), pays=S.payments.filter(p=>p.cid===k.id);
+  return `<div class="hello">Fees<small>${k.name} · Term 1, 2026/27</small></div>
+  <div class="card"><h3>Invoice GHA-2026-${k.id==='ama'?'000231':'000412'}</h3>
+    ${k.items.map(i=>`<div class="kv"><span>${i.n}</span><span>${ghs(i.a)}</span></div>`).join('')}
+    <div class="kv tot"><span>Total</span><span>${ghs(total(k))}</span></div>
+    <div class="kv"><span>Paid</span><span style="color:var(--ok)">− ${ghs(k.paid)}</span></div>
+    <div class="kv tot"><span>Balance</span><span style="color:${b>0?'var(--danger)':'var(--ok)'}">${ghs(b)}</span></div>
+    <div class="bar dark"><i style="width:${pct}%"></i></div>
+    <p class="note" style="margin:6px 0 14px">${b>0?'Due by '+k.due:'Fully paid — thank you!'}</p>
+    ${b>0?`<button class="btn" data-go="pay">Pay ${ghs(b)} or part</button>`:`<button class="btn ghost" disabled>Nothing to pay</button>`}</div>
+  <div class="card"><h3>Payment history</h3>${pays.length?pays.map(p=>`<div class="hist"><div class="l"><b>${p.receipt}</b><small>${p.at} · <span class="chip ${p.channel==='USSD'?'blue':p.channel==='Cash'?'neutral':'ok'}">${p.channel}</span></small></div><div class="r">${ghs(p.amount)}</div></div>`).join(''):'<div class="empty">No payments yet.</div>'}
+    <button class="back" style="margin:10px 0 0" data-dl="1">Download statement (PDF)</button></div>`;
+}
+function payView(k){
+  const P = W.pay || (W.pay={step:'form',mode:'full',amount:bal(k),msisdn:'024 123 4567',net:'MTN'});
+  if(P.step==='waiting') return `<div class="card center"><div class="spin"></div><h3 style="font-size:17px">Approve on your phone</h3>
+    <p class="note">We've sent a MoMo prompt for <b>${ghs(P.amount)}</b> to ${esc(P.msisdn)}.<br>Enter your MoMo PIN to complete the payment.</p>
+    <p class="note" style="margin-top:12px;color:var(--brand);font-weight:600">Demo: use the “Parent's phone” panel →</p>
+    <button class="btn ghost" style="margin-top:16px" data-cancelpay="1">Cancel</button></div>`;
+  if(P.step==='done') return `<div class="card center"><div class="big-ic ok">${icon.check}</div><h3 style="font-size:19px">Payment received</h3>
+    <p class="note">Thank you, Esi. A receipt has been sent by SMS.</p>
+    <div style="text-align:left;margin:16px 0"><div class="kv"><span>Amount</span><b>${ghs(P.amount)}</b></div><div class="kv"><span>Receipt</span><b>${P.receipt}</b></div>
+    <div class="kv"><span>Student</span><b>${k.first} (${k.code})</b></div><div class="kv"><span>New balance</span><b>${ghs(bal(k))}</b></div></div>
+    <button class="btn" data-go="fees">Back to fees</button></div>`;
+  if(P.step==='failed') return `<div class="card center"><div class="big-ic bad">${icon.x}</div><h3 style="font-size:19px">Payment not completed</h3>
+    <p class="note">Reason: ${P.reason}. You have not been charged.</p>
+    <button class="btn" style="margin-top:16px" data-retry="1">Try again</button><button class="back" style="margin-top:12px" data-go="fees">Back to fees</button></div>`;
+  const b=bal(k);
+  return `<button class="back" data-go="fees">← Back</button>
+  <div class="hello" style="font-size:20px">Pay fees<small>${k.name} · Balance ${ghs(b)}</small></div>
+  <div class="card"><div class="seg"><button class="${P.mode==='full'?'on':''}" data-mode="full">Full balance</button><button class="${P.mode==='part'?'on':''}" data-mode="part">Part payment</button></div>
+    <div class="field" id="amt-wrap" style="${P.mode==='part'?'':'display:none'}"><label>Amount (GHS)</label><input id="p-amt" inputmode="decimal" value="${(P.amount/100).toFixed(2)}"></div>
+    <div class="field"><label>Mobile money network</label><select id="p-net">${['MTN','Telecel','AT'].map(n=>`<option ${P.net===n?'selected':''}>${n}</option>`).join('')}</select></div>
+    <div class="field"><label>MoMo number</label><input id="p-num" inputmode="tel" value="${esc(P.msisdn)}"></div>
+    <div class="kv"><span>Transaction fee</span><span>GHS 0.00 <small style="color:var(--muted)">(covered by school)</small></span></div>
+    <p id="p-err" class="note" style="color:var(--danger);min-height:16px;margin:8px 0"></p>
+    <button class="btn" id="p-go">Pay ${ghs(P.amount)}</button>
+    <p class="note" style="margin-top:12px">You'll get a prompt on your phone. Your money goes directly to GreenHill Academy.</p></div>`;
+}
+function bindPay(){
+  const k=kid(W.cid), P=W.pay;
+  if(W.route!=='pay'||!P||P.step!=='form') return;
+  const upd=()=>{ const g=$('#p-go'); if(g) g.textContent='Pay '+ghs(P.amount); };
+  const a=$('#p-amt'); if(a) a.oninput=()=>{ P.amount=Math.round((parseFloat(a.value)||0)*100); upd(); };
+  $('#p-num').oninput=e=>P.msisdn=e.target.value; $('#p-net').onchange=e=>P.net=e.target.value;
+  $('#p-go').onclick=()=>{
+    const b=bal(k), digits=P.msisdn.replace(/\D/g,'');
+    if(P.mode==='full') P.amount=b;
+    if(P.amount<100) return $('#p-err').textContent='Minimum payment is GHS 1.00.';
+    if(P.amount>b) return $('#p-err').textContent=`Amount can't be more than the balance (${ghs(b)}).`;
+    if(digits.length<10) return $('#p-err').textContent='Enter a valid 10-digit MoMo number.';
+    P.step='waiting'; P.intentId=createIntent(k.id,P.amount,P.msisdn,'web'); renderApp();
+  };
+}
+function resultsView(k){
+  const r=k.results, a=avg(k);
+  return `<div class="hello">Results<small>${k.name} · ${r.term}</small></div>
+  <div class="stat3"><div><b>${a.toFixed(1)}</b><span>Average</span></div><div><b>${grade(a)}</b><span>Grade</span></div><div><b>${r.position.split(' ')[0]}</b><span>of ${r.position.split(' ')[2]}</span></div></div>
+  <div class="card"><h3>Subjects <span class="note" style="font-weight:500">· dark tick = class average</span></h3>
+    ${r.subjects.map(s=>{const d=s.s-s.prev;return `<div class="subj"><div class="t"><span>${s.n}</span><span><span class="chip ${gradeCls(s.s)}">${s.s} · ${grade(s.s)}</span></span></div>
+      <div class="track"><i style="width:${s.s}%"></i><u style="left:${s.avg}%"></u></div>
+      <small>Class avg ${s.avg} · <span style="color:${d<0?'var(--danger)':'var(--ok)'};font-weight:700">${d<0?'▼':'▲'} ${Math.abs(d)}</span> vs last term${s.trend?` · tests: ${s.trend.join(' → ')}`:''}</small></div>`}).join('')}</div>
+  <div class="card"><h3>Teacher's remark</h3><p style="font-size:14px;line-height:1.5">“${esc(r.remark)}”</p><p class="note" style="margin-top:8px">— ${r.teacher} · Published ${r.published}</p></div>
+  <button class="btn" data-dl="1">Download report card (PDF)</button>`;
+}
+function attView(k){
+  const days=[]; // Sep 28 .. Oct 23 (20 school days); today = Oct 20
+  for(let i=0;i<20;i++){ const idx=i; days.push(idx); }
+  const dateOf=i=>{const base=new Date(2026,8,28);base.setDate(base.getDate()+Math.floor(i/5)*7+(i%5));return base;};
+  const today=new Date(2026,9,20);
+  const cells=days.map(i=>{const dt=dateOf(i);let c='';if(dt>today)c='f';else if(k.att.absent.includes(i))c='a';else if(k.att.late.includes(i))c='l';return `<div class="d ${c}">${dt.getDate()}</div>`;}).join('');
+  return `<div class="hello">Attendance<small>${k.name} · last 4 weeks</small></div>
+  <div class="stat3"><div><b>${k.att.present}</b><span>Present</span></div><div><b>${k.att.total-k.att.present}</b><span>Absent</span></div><div><b>${Math.round(k.att.present/k.att.total*100)}%</b><span>Rate</span></div></div>
+  <div class="card"><div class="cal">${['Mon','Tue','Wed','Thu','Fri'].map(d=>`<div class="h">${d}</div>`).join('')}${cells}</div>
+    <div class="legend"><span><i class="ok"></i>Present</span><span><i class="bad"></i>Absent</span><span><i class="warn"></i>Late</span><span><i class="off"></i>Upcoming</span></div></div>
+  <p class="note">Last absence: <b>${k.att.lastAbsent}</b>. You're alerted by SMS/WhatsApp on the day.</p>`;
+}
+function noticesView(){
+  return `<button class="back" data-go="more">← Back</button><div class="hello" style="font-size:20px">Notices</div>
+  ${S.notices.map(n=>`<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span class="chip neutral">${n.tag}</span><span class="note">${n.d}</span></div><b style="font-size:14.5px">${n.t}</b><p class="note" style="margin-top:4px;font-size:13px">${n.b}</p></div>`).join('')}`;
+}
+function moreView(){
+  return `<div class="hello">More<small>Esi Mensah · ${S.guardian.msisdn}</small></div>
+  <div class="card" style="padding:4px 14px">
+    <button class="menu-row" data-go="attendance"><span>Attendance</span><small>›</small></button>
+    <button class="menu-row" data-go="notices"><span>School notices</span><small>${S.notices.length} ›</small></button>
+    <button class="menu-row" data-go="settings"><span>Alert preferences</span><small>›</small></button>
+    <button class="menu-row" data-ussd="1"><span>Pay by USSD (*714#)</span><small>›</small></button>
+    <button class="menu-row" data-logout="1" style="border:0;color:var(--danger)"><span>Log out</span></button></div>
+  <p class="note center">EsmPay v0.1 prototype · Your data is protected under the Data Protection Act.</p>`;
+}
+function settingsView(){
+  const c=S.guardian.ch;
+  return `<button class="back" data-go="more">← Back</button><div class="hello" style="font-size:20px">Alert preferences</div>
+  <div class="card"><h3>How should we reach you?</h3>
+    ${[['sms','SMS'],['whatsapp','WhatsApp'],['email','Email']].map(([k,l])=>`<div class="toggle" data-ch="${k}"><span>${l}</span><i class="sw ${c[k]?'on':''}"></i></div>`).join('')}
+    <p class="note" style="margin-top:10px">Receipts and security codes are always sent. If WhatsApp fails we fall back to SMS.</p></div>
+  <div class="card"><h3>Language</h3><div class="seg">${['English','Twi','Ewe'].map(l=>`<button class="${S.guardian.lang===l?'on':''}" data-lang="${l}">${l}</button>`).join('')}</div>
+    <p class="note">Applies to alerts and USSD screens.</p></div>`;
+}
+
+/* web app event delegation */
+$('#app').addEventListener('click',e=>{
+  const t=e.target.closest('[data-go],[data-kid],[data-mode],[data-why],[data-dl],[data-cancelpay],[data-retry],[data-ch],[data-lang],[data-logout],[data-ussd]'); if(!t) return;
+  const d=t.dataset;
+  if(d.go) return go(d.go);
+  if(d.kid){ W.cid=d.kid; return renderApp(); }
+  if(d.mode){ const k=kid(W.cid); W.pay.mode=d.mode; W.pay.amount=d.mode==='full'?bal(k):Math.min(50000,bal(k)); return renderApp(); }
+  if(d.why!==undefined){ const b=$('#why-box'); b.style.display=b.style.display==='none'?'block':'none'; return; }
+  if(d.dl!==undefined) return toast('PDF downloaded (demo)');
+  if(d.cancelpay!==undefined){ cancelPending('cancelled'); return go('fees'); }
+  if(d.retry!==undefined){ const k=kid(W.cid); W.pay={step:'form',mode:'full',amount:bal(k),msisdn:'024 123 4567',net:'MTN'}; return renderApp(); }
+  if(d.ch){ S.guardian.ch[d.ch]=!S.guardian.ch[d.ch]; return renderApp(); }
+  if(d.lang){ S.guardian.lang=d.lang; return renderApp(); }
+  if(d.logout!==undefined) return go('login');
+  if(d.ussd!==undefined){ toast('Dial *714# on the feature phone →'); }
+});
+$('#momo-panel').addEventListener('click',e=>{ const b=e.target.closest('[data-momo]'); if(b) momoResolve(b.dataset.momo); });
+
+/* ============================================================
+   USSD engine  (implements docs/06-ussd-spec.md)
+   ============================================================ */
+const uk = () => kid(U.ctx.cid);
+const pendingFor = cid => S.pending && S.pending.cid===cid;
+function uGo(st){ U.hist.push(U.st); U.st=st; }
+function uEnd(text){ U.end=true; U.out=text; U.st='end'; }
+function uText(){
+  const k = U.ctx.cid ? uk() : null;
+  switch(U.st){
+    case 'menu': return 'Welcome to EsmPay\nGreenHill Academy\n1. Pay fees\n2. Balance\n3. Results\n4. Attendance\n5. My account\n0. Exit';
+    case 'child': return 'Select child\n'+S.children.map((c,i)=>`${i+1}. ${c.name} (${c.cls})`).join('\n')+'\n0. Back';
+    case 'pending': return `Payment of GHS ${n2(S.pending.amount)} for ${k.first} is pending.\n1. Check status\n2. Start new\n0. Back`;
+    case 'payopts': return `${k.first}: Due GHS ${n2(bal(k))}\n1. Pay all\n2. Pay part\n3. Pay by item\n0. Back`;
+    case 'payamt': return `Enter amount (GHS)\nMin 1, max ${n2(bal(k))}\n0. Back`;
+    case 'payitem': return 'Select item\n'+k.items.map((i,x)=>`${x+1}. ${i.n} ${n2(i.a)}`).join('\n')+'\n0. Back';
+    case 'paymomo': return `Pay from:\n1. This number\n   (${S.guardian.msisdn.replace('+233 ','0')})\n2. Other number\n0. Back`;
+    case 'payother': return 'Enter MoMo number\n(e.g. 0551234567)\n0. Back';
+    case 'pin': return U.ctx.after==='pay' ? `Enter 4-digit PIN to\npay GHS ${n2(U.ctx.amount)} for ${k.first}` :
+                        U.ctx.after==='res' ? 'Enter 4-digit PIN to\nview results' : 'Enter current PIN';
+    case 'payconfirm': return `Pay GHS ${n2(U.ctx.amount)} to\nGreenHill for ${k.first}?\nFee: GHS 0.00\n1. Confirm\n2. Cancel`;
+    case 'bal': { const last=S.payments.find(p=>p.cid===k.id);
+      return `${k.first}: Total ${n2(total(k))}\nPaid ${n2(k.paid)}\nDue ${n2(bal(k))}${bal(k)>0?' ('+k.due.slice(0,6)+')':''}\nLast pay: ${last?last.at:'-'}\n${bal(k)>0?'1. Pay now\n':''}0. Back`; }
+    case 'res': { const r=k.results, sorted=[...r.subjects].sort((a,b)=>b.s-a.s);
+      return `${k.first} ${r.term.split(' · ')[0]}\nAvg ${avg(k).toFixed(1)}  Pos ${r.position.replace(' of ','/')}\nBest: ${sorted[0].n} ${sorted[0].s}\nLowest: ${sorted.at(-1).n} ${sorted.at(-1).s}\n1. SMS full results\n0. Back`; }
+    case 'att': return `${k.first} this term\nPresent ${k.att.present}/${k.att.total}\nLast absent: ${k.att.lastAbsent}\n0. Back`;
+    case 'acct': return 'My account\n1. Change PIN\n2. Alert channels\n0. Back';
+    case 'chpin_new': return 'Enter new 4-digit PIN\n(avoid 1234, 0000)';
+    case 'prefs': return `Alerts\n1. SMS: ${S.guardian.ch.sms?'ON':'OFF'}\n2. WhatsApp: ${S.guardian.ch.whatsapp?'ON':'OFF'}\n0. Back`;
+  }
+  return '';
+}
+function uStep(v){
+  const bad = () => { U.note='Invalid choice. Try again.\n'; };
+  switch(U.st){
+    case 'menu':
+      if('1234'.includes(v)&&v.length===1){ U.ctx={next:{1:'pay',2:'bal',3:'res',4:'att'}[v]}; uGo('child'); }
+      else if(v==='5') uGo('acct'); else bad(); break;
+    case 'child': {
+      const c=S.children[parseInt(v,10)-1]; if(!c||!/^\d$/.test(v)) return bad();
+      U.ctx.cid=c.id; const nx=U.ctx.next;
+      if(nx==='pay'){ if(bal(c)<=0) return uEnd(`No fees due for ${c.first}.\nThank you!`); uGo(pendingFor(c.id)?'pending':'payopts'); }
+      else if(nx==='bal') uGo('bal');
+      else if(nx==='res'){ U.ctx.after='res'; uGo('pin'); }
+      else uGo('att'); break; }
+    case 'pending':
+      if(v==='1') uEnd('Still awaiting approval.\nCheck your MoMo prompt\nor dial again later.');
+      else if(v==='2'){ cancelPending('the request was replaced by a new one'); uGo('payopts'); } else bad(); break;
+    case 'payopts':
+      if(v==='1'){ U.ctx.amount=bal(uk()); uGo('paymomo'); } else if(v==='2') uGo('payamt'); else if(v==='3') uGo('payitem'); else bad(); break;
+    case 'payamt': { const a=Math.round(parseFloat(v)*100), b=bal(uk());
+      if(!(a>=100&&a<=b)) { U.note=`Min GHS 1. Max GHS ${n2(b)}.\n`; return; }
+      U.ctx.amount=a; uGo('paymomo'); break; }
+    case 'payitem': { const it=uk().items[parseInt(v,10)-1]; if(!it||!/^\d$/.test(v)) return bad();
+      U.ctx.amount=Math.min(it.a,bal(uk())); uGo('paymomo'); break; }
+    case 'paymomo':
+      if(v==='1'){ U.ctx.momo=S.guardian.msisdn; U.ctx.after='pay'; uGo('pin'); } else if(v==='2') uGo('payother'); else bad(); break;
+    case 'payother':
+      if(/^0\d{9}$/.test(v)){ U.ctx.momo=v; U.ctx.after='pay'; uGo('pin'); } else U.note='Invalid number. Use\n10 digits e.g. 0551234567\n'; break;
+    case 'pin': {
+      const g=S.guardian;
+      if(g.locked) return uEnd('PIN locked for 30 min.\nReset it on the web app\nor ask the school.');
+      if(!/^\d{4}$/.test(v)){ U.note='PIN must be 4 digits.\n'; return; }
+      if(v===g.pin){ g.fails=0; U.st = U.ctx.after==='pay'?'payconfirm':U.ctx.after==='res'?'res':'chpin_new'; }
+      else { g.fails++; const left=3-g.fails;
+        if(left<=0){ g.locked=true; sms('Security: your EsmPay PIN was locked after 3 wrong attempts. If this was not you, contact GreenHill Academy.'); return uEnd('Wrong PIN. Your PIN is\nlocked for 30 min.\nSMS alert sent.'); }
+        U.note=`Wrong PIN. ${left} ${left>1?'tries':'try'} left.\n`; }
+      break; }
+    case 'payconfirm':
+      if(v==='1'){ createIntent(U.ctx.cid,U.ctx.amount,U.ctx.momo,'ussd'); uEnd('Request sent. Approve\non your phone with MoMo\nPIN. SMS receipt follows.'); }
+      else if(v==='2') uEnd('Payment cancelled.'); else bad(); break;
+    case 'bal': if(v==='1'&&bal(uk())>0) uGo('payopts'); else bad(); break;
+    case 'res': if(v==='1'){ const k=uk(); sms(`GreenHill: ${k.first} ${k.results.term}. Avg ${avg(k).toFixed(1)}, position ${k.results.position}. Full report: esmpay.app/r/${k.code}`); U.note='Sent to your phone.\n'; } else bad(); break;
+    case 'att': bad(); break;
+    case 'acct': if(v==='1'){ U.ctx.after='chpin'; uGo('pin'); } else if(v==='2') uGo('prefs'); else bad(); break;
+    case 'chpin_new':
+      if(!/^\d{4}$/.test(v)||/^(\d)\1{3}$/.test(v)||v==='1234'||v==='4321'){ U.note='Weak PIN. Avoid 1234\nor repeated digits.\n'; return; }
+      S.guardian.pin=v; sms('Security: your EsmPay PIN was changed. If this was not you, contact the school.'); uEnd('PIN changed.\nSMS confirmation sent.'); break;
+    case 'prefs':
+      if(v==='1'){ S.guardian.ch.sms=!S.guardian.ch.sms; } else if(v==='2'){ S.guardian.ch.whatsapp=!S.guardian.ch.whatsapp; } else bad(); break;
+  }
+}
+function uSend(raw){
+  if(!U.active||U.end) return;
+  U.last=Date.now(); const v=String(raw).trim(); U.note='';
+  if(v==='') return;
+  if(v==='00'&&U.st!=='menu'){ U.hist=[]; U.st='menu'; U.ctx={}; }
+  else if(v==='0'){ if(U.st==='menu') uEnd('Thank you for using\nEsmPay. Goodbye.'); else U.st=U.hist.pop()||'menu'; }
+  else uStep(v);
+  if(!U.end) U.out=U.note+uText();
+  renderUSSD();
+}
+function uDial(){ Object.assign(U,{active:true,st:'menu',hist:[],ctx:{},end:false,note:'',last:Date.now()}); U.out=uText(); renderUSSD(); $('#uin').focus(); }
+function uHang(){ if(!U.active) return; U.active=false; U.end=false; U.st='idle'; U.out=''; renderUSSD(); }
+function renderUSSD(){
+  const lcd=$('#lcd'), inp=$('#uin');
+  if(!U.active) lcd.innerHTML='<div class="idle">\n\n\n   Dial *714#\n   to start</div>';
+  else lcd.innerHTML=esc(U.out)+`<span class="cnt">${U.out.length}/160</span>`;
+  inp.type = (U.active&&!U.end&&U.st==='pin')?'password':'text';
+  inp.disabled = !U.active||U.end; if(inp.disabled) inp.placeholder = U.end?'Session ended':'Dial first';
+  else inp.placeholder='Enter reply';
+  $('#udial').disabled = U.active&&!U.end; $('#uhang').disabled = !U.active;
+  inp.value='';
+  $('#usess').textContent = U.end?'Session ended':(U.active?'Session idle timeout: 120s':'');
+}
+document.getElementById('keys').innerHTML=['1','2','3','4','5','6','7','8','9','*','0','#'].map(k=>`<button data-k="${k}">${k}</button>`).join('');
+$('#keys').addEventListener('click',e=>{ const b=e.target.closest('[data-k]'); if(!b) return; const i=$('#uin'); if(!i.disabled) { i.value+=b.dataset.k; i.focus(); } });
+$('#usend').onclick=()=>uSend($('#uin').value);
+$('#uin').addEventListener('keydown',e=>{ if(e.key==='Enter') uSend($('#uin').value); });
+$('#udial').onclick=uDial; $('#uhang').onclick=uHang;
+setInterval(()=>{ // 120s idle timeout like a real telco session
+  const el=$('#usess');
+  if(U.active&&!U.end){ const left=120-Math.floor((Date.now()-U.last)/1000); el.textContent=`Session idle timeout: ${Math.max(left,0)}s`;
+    if(left<=0){ U.out='Session timed out.\nPlease dial again.'; U.end=true; renderUSSD(); } }
+  else el.textContent = U.end?'Session ended':'';
+},1000);
+
+/* reset */
+$('#reset').onclick=()=>{ try{localStorage.removeItem('esmpay.payments');}catch(e){} S=fresh(); W.route='login'; W.cid='ama'; W.pay=null; Object.assign(U,{active:false,st:'idle',hist:[],ctx:{},out:'',end:false}); renderUSSD(); renderMomo(); renderSMS(); renderApp(); };
+
+/* boot */
+renderUSSD(); renderMomo(); renderSMS(); renderApp();
+
+/* optional deep links for demos/screenshots:  index.html#scene=home|pay|results|fees|ussd */
+(function scene(){
+  const m=location.hash.match(/scene=([\w-]+)/); if(!m) return;
+  const login=()=>{ $('#lg-send').click(); $('#lg-code').value=S.otp; $('#lg-verify').click(); };
+  const sc=m[1]; login();
+  if(sc==='results') go('results');
+  if(sc==='fees') go('fees');
+  if(sc==='attendance') go('attendance');
+  if(sc==='more') go('more');
+  if(sc==='settings') go('settings');
+  if(sc==='payform') go('pay');
+  if(sc==='pay'){ go('pay'); W.pay.mode='part'; W.pay.amount=30000; renderApp(); $('#p-go').click(); }
+  if(sc==='ussd'){ uDial(); uSend('1'); uSend('1'); uSend('2'); uSend('300'); uSend('1'); uSend('4826'); uSend('1'); }
+  if(sc==='ussd-menu'){ uDial(); }
+})();
+</script>
+</body>
+</html>

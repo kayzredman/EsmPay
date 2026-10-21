@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EsmPay Console — Interactive Prototype</title>
+<link rel="stylesheet" href="assets/ui.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><div class="lg">E</div><div><b>EsmPay</b><span>Console</span></div></div>
+  <div class="roles" id="roles"></div>
+  <div class="sp"></div>
+  <button class="cmdk" id="cmdk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Jump to&hellip;<kbd>&#8984;K</kbd></button>
+  <a class="lk" href="index.html">Parent app &amp; USSD</a>
+  <button class="lk" id="reset">Reset demo</button>
+  <div class="user"><i id="uav"></i><span id="uname"></span></div>
+</header>
+<div class="shell"><aside id="side"></aside><main id="main"></main></div>
+<div id="ov"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   Helpers
+   ============================================================ */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=t=>String(t??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fm=(p,d=2)=>'GHS '+(p/100).toLocaleString('en-GH',{minimumFractionDigits:d,maximumFractionDigits:d});
+const g0=n=>'GHS '+Math.round(n).toLocaleString('en-GH');
+const num=n=>Math.round(n).toLocaleString('en-GH');
+const pct=(a,b)=>b?Math.round(a/b*100):0;
+const initials=n=>n.split(' ').map(w=>w[0]).slice(0,2).join('');
+const grade=s=>s>=80?'A':s>=70?'B':s>=60?'C':s>=50?'D':'E';
+const gcls=s=>s>=70?'ok':s>=50?'warn':'bad';
+const ago=ms=>{const m=Math.round((Date.now()-ms)/60000);return m<1?'just now':m<60?m+' min ago':m<1440?Math.round(m/60)+' h ago':Math.round(m/1440)+' d ago';};
+function toast(t){const el=$('#toast');el.textContent=t;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2600);}
+function seeded(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+function bars(vals,labels,h=160,color='#0b6b53',hi=-1){
+  const w=vals.length*58+16,mx=Math.max(...vals)*1.18;
+  return `<svg viewBox="0 0 ${w} ${h+28}" width="100%">${vals.map((v,i)=>{const bh=v/mx*h,x=10+i*58;
+   return `<rect x="${x}" y="${h-bh}" width="40" height="${bh}" rx="7" fill="${i===hi?'#f2a900':color}"/>
+   <text x="${x+20}" y="${h-bh-6}" text-anchor="middle" font-size="11" fill="#5b6f67">${v}</text>
+   <text x="${x+20}" y="${h+18}" text-anchor="middle" font-size="11" fill="#5b6f67">${labels[i]}</text>`}).join('')}</svg>`;}
+function donut(parts,size=150){const r=54,c=2*Math.PI*r,tot=parts.reduce((a,p)=>a+p.v,0);let off=0;
+  return `<svg viewBox="0 0 150 150" width="${size}" height="${size}"><g transform="rotate(-90 75 75)">${parts.map(p=>{const len=p.v/tot*c;const s=`<circle cx="75" cy="75" r="${r}" fill="none" stroke="${p.c}" stroke-width="22" stroke-dasharray="${len} ${c-len}" stroke-dashoffset="${-off}"/>`;off+=len;return s;}).join('')}</g></svg>`;}
+const hbar=(label,val,max,txt,color)=>`<div class="hb"><span class="lbl">${label}</span><div class="tr"><i style="width:${Math.min(100,val/max*100)}%;${color?'background:'+color:''}"></i></div><span class="v">${txt}</span></div>`;
+
+/* ============================================================
+   Mock data (one shared in-memory world for all three consoles)
+   ============================================================ */
+const NAMES=['Ama Mensah','Kwame Asante','Akosua Boateng','Yaw Owusu','Efua Darko','Kofi Adjei','Abena Quaye','Nana Osei','Esi Tetteh','Kojo Baidoo','Adwoa Frimpong','Kwesi Appiah','Yaa Sarpong','Fiifi Amoah','Maame Ofori','Kwabena Antwi','Afia Bonsu','Papa Acquah','Serwaa Nkrumah','Ebo Lamptey','Dede Annan','Selorm Agbeko','Mawuli Dzifa','Naa Lamiokor'];
+const PAID=[60000,130000,130000,0,90000,130000,45000,130000,130000,70000,0,130000,100000,30000,130000,130000,65000,130000,0,120000,130000,50000,130000,90000];
+function makeStudents(){
+  const rnd=seeded(42);
+  return NAMES.map((n,i)=>{
+    const sur=n.split(' ')[1], pre=[24,55,20,50,26][i%5];
+    const sc= i===0?{t1:14,t2:12,ex:32}: i===5?{t1:8,t2:7,ex:22}:
+      {t1:9+Math.floor(rnd()*10),t2:8+Math.floor(rnd()*11),ex:26+Math.floor(rnd()*30)};
+    return {id:i,name:n,guardian:(i%2?'Mr. ':'Mrs. ')+sur,phone:`0${pre} ${100+(i*73)%900} ${1000+(i*517)%9000}`,wa:i%3!==0,
+      total:130000,paid:PAID[i],att:i===3?78:88+Math.floor(rnd()*12),streak:i===3?2:0,sc,att_today:'P',notes:[]};
+  });
+}
+function freshWorld(){
+  const st=makeStudents(); st[23].sc.ex=null; st[21].sc.t2=null;
+  const now=Date.now();
+  return {
+    students:st,
+    manual:[], wallet:148.20, receiptNo:300,
+    seedFeed:[
+      {who:'Kwame Asante',ch:'USSD',amt:130000,ts:now-9*60000},{who:'Papa Acquah',ch:'Web',amt:130000,ts:now-27*60000},
+      {who:'Efua Darko',ch:'Cash',amt:50000,ts:now-52*60000},{who:'Adwoa Frimpong',ch:'USSD',amt:20000,ts:now-80*60000},
+      {who:'Kojo Baidoo',ch:'Web',amt:70000,ts:now-3*3600000}],
+    subs:[
+      {id:1,cls:'JHS 2A',sub:'English',teacher:'Mrs. Quaye',avg:66.4,prev:65.0,status:'submitted'},
+      {id:2,cls:'JHS 2A',sub:'Integrated Science',teacher:'Mr. Tetteh',avg:63.1,prev:62.0,status:'submitted'},
+      {id:3,cls:'JHS 2A',sub:'Social Studies',teacher:'Ms. Amoah',avg:64.2,prev:64.0,status:'draft',note:'18 of 24 graded'},
+      {id:4,cls:'JHS 2A',sub:'ICT',teacher:'Mr. Lartey',avg:70.5,prev:69.2,status:'approved'},
+      {id:5,cls:'JHS 2A',sub:'RME',teacher:'Rev. Danso',avg:72.8,prev:73.0,status:'submitted'},
+      {id:6,cls:'JHS 2A',sub:'Mathematics',teacher:'Mr. Boateng',avg:0,prev:68.0,status:'draft',live:true}],
+    publishLog:[], returned:false,
+    insights:[
+      {id:1,sid:0,type:'decline',vis:'parent',text:'Ama\u2019s Maths scores have dipped in her last 3 tests (74 \u2192 66 \u2192 58). Short daily practice on fractions and ratios may help.',ev:'Maths tests 74, 66, 58 \u00b7 class avg 61 \u00b7 \u221216 vs last term',status:'pending'},
+      {id:2,sid:3,type:'attendance',vis:'parent',text:'Yaw has missed 4 days in the last two weeks. Please let the school know if there is an issue we can help with.',ev:'Absent 4 of last 10 school days \u00b7 attendance rate 78%',status:'pending'},
+      {id:3,sid:4,type:'praise',vis:'parent',text:'Efua has improved in every subject this term and is doing especially well in Science. Great progress!',ev:'Average +9 vs last term \u00b7 Science 91 (class avg 63)',status:'pending'},
+      {id:4,sid:5,type:'risk',vis:'teacher',text:'Kofi A. has a 72% estimated chance of finishing Maths below the pass mark if the current trend continues.',ev:'Model v0.3 (shadow) \u00b7 top factors: low CA scores, 2 missed tests \u00b7 teacher-only',status:'pending'}],
+    attSaved:false, attAbsent:[],
+    msgHistory:[{when:'Yesterday',aud:'JHS 2 parents',ch:'WhatsApp + SMS',n:42,ok:41,txt:'Reminder: PTA meeting Saturday 10:00.'},{when:'Mon',aud:'All teachers',ch:'WhatsApp',n:28,ok:28,txt:'Staff meeting moved to 2pm Friday.'}],
+    platform:{
+      schools:[
+        {id:1,name:'GreenHill Academy',city:'Accra',plan:'Growth',students:412,status:'Live',stage:7,vol:301420,wallet:148.20,inv:'Paid'},
+        {id:2,name:"St. Mary's Basic",city:'Kumasi',plan:'Starter',students:186,status:'Live',stage:7,vol:88200,wallet:22.10,inv:'Paid'},
+        {id:3,name:'Bright Future Prep',city:'Accra',plan:'Growth',students:540,status:'Live',stage:7,vol:402900,wallet:310.00,inv:'Paid'},
+        {id:4,name:'Kumasi Heights SHS',city:'Kumasi',plan:'Pro',students:1240,status:'Live',stage:7,vol:1182000,wallet:890.40,inv:'Paid'},
+        {id:5,name:'Osu Presby JHS',city:'Accra',plan:'Starter',students:238,status:'Onboarding',stage:4,vol:0,wallet:0,inv:'Trial'},
+        {id:6,name:'Tamale Unity School',city:'Tamale',plan:'Growth',students:320,status:'Onboarding',stage:5,vol:0,wallet:50.00,inv:'Trial'},
+        {id:7,name:'Cape Coast Montessori',city:'Cape Coast',plan:'Starter',students:96,status:'Live',stage:7,vol:41300,wallet:8.60,inv:'Paid'},
+        {id:8,name:'Takoradi Grace Academy',city:'Takoradi',plan:'Growth',students:410,status:'Suspended',stage:7,vol:210500,wallet:0,inv:'Overdue'},
+        {id:9,name:'Ho Model Basic',city:'Ho',plan:'Starter',students:150,status:'Trial',stage:6,vol:12400,wallet:40.00,inv:'Trial'},
+        {id:10,name:'Sunyani Royal School',city:'Sunyani',plan:'Pro',students:880,status:'Live',stage:7,vol:760300,wallet:421.00,inv:'Paid'}],
+      settle:[
+        {id:1,school:'Bright Future Prep',period:'19 Oct',gross:4812000,pfee:48120,plat:24060,status:'pending'},
+        {id:2,school:'Kumasi Heights SHS',period:'19 Oct',gross:12640000,pfee:126400,plat:63200,status:'pending'},
+        {id:3,school:'GreenHill Academy',period:'19 Oct',gross:2290000,pfee:22900,plat:11450,status:'pending'},
+        {id:4,school:"St. Mary's Basic",period:'19 Oct',gross:1150000,pfee:11500,plat:5750,status:'approved'},
+        {id:5,school:'Sunyani Royal School',period:'18 Oct',gross:9020000,pfee:90200,plat:45100,status:'paid'}],
+      exceptions:[
+        {id:1,type:'Provider success \u2014 no internal payment',school:'Bright Future Prep',ref:'MP2610200981',amt:25000,age:'31 h'},
+        {id:2,type:'Amount mismatch (provider 500.00 vs intent 50.00)',school:'GreenHill Academy',ref:'MP2610191177',amt:50000,age:'27 h'},
+        {id:3,type:'Internal success \u2014 provider record missing',school:'Sunyani Royal School',ref:'pi_01920xk3',amt:18000,age:'8 h'},
+        {id:4,type:'Provider success \u2014 no internal payment',school:'Kumasi Heights SHS',ref:'MP2610200455',amt:60000,age:'6 h'}],
+      providers:[
+        {k:'pay',name:'Aggregator A \u2014 MoMo collections',type:'Payments',status:'Operational',lat:'1.2 s',ok:'94.2%',on:true},
+        {k:'sms1',name:'SMS Provider 1 (primary)',type:'SMS',status:'Degraded',lat:'4.8 s',ok:'91.0%',on:true},
+        {k:'sms2',name:'SMS Provider 2 (standby)',type:'SMS',status:'Operational',lat:'2.1 s',ok:'97.6%',on:true},
+        {k:'wa',name:'WhatsApp Business Cloud API',type:'WhatsApp',status:'Operational',lat:'0.9 s',ok:'98.4%',on:true},
+        {k:'em',name:'Email provider',type:'Email',status:'Operational',lat:'0.6 s',ok:'99.1%',on:true},
+        {k:'ussd',name:'USSD gateway *714#',type:'USSD',status:'Operational',lat:'1.4 s p95',ok:'96.3%',on:true}],
+      smsPrimary:'sms1'}
+  };
+}
+let D=freshWorld();
+
+/* shared with the parent demo via localStorage */
+const livePays=()=>{try{return JSON.parse(localStorage.getItem('esmpay.payments')||'[]');}catch(e){return[];}};
+const BASE={billed:535600*100,collected:30142000,ch:{USSD:12358200,Web:9946900,Cash:6028400,Bank:1808500}};
+const livePaid=sid=>livePays().filter(p=>sid===0&&p.cid==='ama').reduce((a,p)=>a+p.amount,0);
+const manualPaid=sid=>D.manual.filter(m=>m.sid===sid).reduce((a,m)=>a+m.amount,0);
+const paid=s=>s.paid+livePaid(s.id)+manualPaid(s.id);
+const bal=s=>s.total-paid(s);
+const stStatus=s=>bal(s)<=0?['Paid','ok']:paid(s)>0?['Part paid','warn']:['Unpaid','bad'];
+function school(){
+  const L=livePays(), liveSum=L.reduce((a,p)=>a+p.amount,0), manSum=D.manual.reduce((a,m)=>a+m.amount,0);
+  const ch={...BASE.ch};
+  L.forEach(p=>ch[p.channel]+=p.amount); D.manual.forEach(m=>ch[m.method==='Cash'?'Cash':'Bank']+=m.amount);
+  const collected=BASE.collected+liveSum+manSum, out=BASE.billed-collected;
+  return {billed:BASE.billed,collected,out,ch,liveCount:L.length,liveSum};
+}
+const teacherName='Mr. Boateng', pass=50;
+const tot=s=>(s.sc.t1==null||s.sc.t2==null||s.sc.ex==null)?null:s.sc.t1+s.sc.t2+s.sc.ex;
+function mathsStats(){const t=D.students.map(tot).filter(x=>x!=null);return{n:t.length,avg:t.length?t.reduce((a,b)=>a+b,0)/t.length:0,hi:Math.max(...t),lo:Math.min(...t),below:t.filter(x=>x<pass).length};}
+
+/* ============================================================
+   Navigation / shell
+   ============================================================ */
+const IC={
+ grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+ trend:'<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+ pulse:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+ school:'<path d="M3 21h18M5 21V9l7-5 7 5v12"/><path d="M9 21v-6h6v6"/>',
+ bank:'<path d="M3 10l9-6 9 6M5 10v8M9 10v8M15 10v8M19 10v8M3 21h18"/>',
+ plug:'<path d="M9 2v6M15 2v6M6 8h12v4a6 6 0 01-12 0zM12 18v4"/>',
+ receipt:'<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+ scale:'<path d="M12 3v18M5 21h14M5 7h14"/><path d="M5 7l-3 7a3 3 0 006 0zM19 7l-3 7a3 3 0 006 0z"/>',
+ check:'<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
+ chat:'<path d="M4 5h16v11H9l-5 4z"/>',
+ sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+ table:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/>',
+ user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/>',
+ users:'<circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0114 0M16 4.5a3.5 3.5 0 010 7M22 20a6 6 0 00-4-5.6"/>'
+};
+const icon=(k)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${IC[k]||''}</svg>`;
+const ROLES={
+ platform:{label:'Platform Admin',user:'Kwekku A.',org:['EsmPay Platform','System administration'],pages:[
+   ['overview','Overview','grid','Monitor'],['flow','Service map','pulse','Monitor'],
+   ['revenue','Revenue','trend','Finance'],['settle','Settlements','bank','Finance'],
+   ['schools','Schools','school','Manage'],['providers','Providers & wallets','plug','Manage']]},
+ school:{label:'School Head / Bursar',user:'Mrs. Adjei',org:['GreenHill Academy','Head & Bursar console'],pages:[
+   ['dash','Dashboard','grid','Overview'],['fees','Fees & invoices','receipt','Finance'],['recon','Reconciliation','scale','Finance'],
+   ['results','Results approval','check','Academics'],['msg','Messages','chat','Communication']]},
+ teacher:{label:'Teacher',user:'Mr. Boateng',org:['GreenHill Academy','JHS 2A \u00b7 Mathematics'],pages:[
+   ['tdash','My day','sun','Teaching'],['grades','Gradebook','table','Teaching'],['attend','Attendance','user','Teaching'],['klass','My class','users','Teaching']]}
+};
+const ui={role:'school',page:'dash',feeFilter:'all',feeQ:'',schoolQ:'',schoolFilter:'all',msg:{aud:'arrears',ch:{sms:true,wa:true,em:false},body:'Dear parent, a gentle reminder that {{student_first_name}}\'s school fees balance of {{balance}} is due on 15 Nov. Pay on *714# or esmpay.app. Thank you. - GreenHill Academy',sending:null}};
+const PAGES={};
+function badges(){
+  const subs=D.subs.filter(s=>s.status==='submitted').length, ins=D.insights.filter(i=>i.status==='pending').length;
+  const inc=(window.activeIncidents?activeIncidents().length:0);
+  return {results:[subs],tdash:[ins],settle:[D.platform.settle.filter(s=>s.status==='pending').length],recon:[RECON.filter(r=>!r.done).length],flow:[inc,'']};
+}
+function render(){
+  window.flowStop&&flowStop();
+  renderSide();
+  $('#main').innerHTML=PAGES[ui.page]();
+  after();
+}
+function renderSide(){
+  const R=ROLES[ui.role], b=badges();
+  $('#roles').innerHTML=Object.entries(ROLES).map(([k,v])=>`<button class="${k===ui.role?'on':''}" data-role="${k}">${v.label}</button>`).join('');
+  $('#uname').textContent=R.user; $('#uav').textContent=initials(R.user.replace(/^(Mr|Mrs)\.\s/,''));
+  let grp=''; const nav=R.pages.map(([k,l,ic,g])=>{let h='';if(g!==grp){grp=g;h=`<div class="grp">${g}</div>`;}
+    const bb=b[k]&&b[k][0]?`<span class="badge ${k==='flow'?'':'amber'}">${b[k][0]}</span>`:'';
+    return h+`<button class="${k===ui.page?'on':''}" data-page="${k}">${icon(ic)}${l}${bb}</button>`;}).join('');
+  $('#side').innerHTML=`<div class="org"><b>${R.org[0]}</b><span>${R.org[1]}</span></div>`+nav+`<div class="side-foot">Prototype \u00b7 mock data<br>Tue 20 Oct 2026</div>`;
+}
+function setRole(r){ui.role=r;ui.page=ROLES[r].pages[0][0];render();window.scrollTo(0,0);}
+function modal(html,side){const o=$('#ov');o.className='show'+(side?' right':'');o.innerHTML=side?`<div class="drawer">${html}</div>`:`<div class="modal">${html}</div>`;}
+function closeOv(){$('#ov').className='';$('#ov').innerHTML='';}
+$('#ov').addEventListener('mousedown',e=>{if(e.target.id==='ov')closeOv();});
+$('#reset').onclick=()=>{try{localStorage.removeItem('esmpay.payments');}catch(e){} D=freshWorld(); RECON=freshRecon(); seen=0; window.flowReset&&flowReset(); render(); toast('Demo reset');};
+
+/* ============================================================
+   PLATFORM ADMIN
+   ============================================================ */
+PAGES.overview=()=>{
+  const P=D.platform, L=livePays(), liveSum=L.reduce((a,p)=>a+p.amount,0)/100;
+  const vol=[310,285,402,520,640,380,420,470];
+  const live=P.schools.filter(s=>s.status==='Live').length;
+  return `<div class="head"><div><h1>Platform overview</h1><div class="sub">All tenants \u00b7 last 30 days \u00b7 Tuesday 20 Oct 2026</div></div></div>
+  ${L.length?`<div class="banner info"><b>Live from parent demo:</b> ${L.length} payment${L.length>1?'s':''} (${g0(liveSum)}) received just now via the parent app/USSD.</div>`:''}
+  ${window.incidentBanner?incidentBanner():''}
+  ${window.revenueStrip?revenueStrip():''}
+  <div class="kpis">
+    <div class="kpi"><span>Active schools</span><b>${live+D.platform.schools.filter(s=>s.status==='Trial').length+38}</b><small class="up">+3 this month</small></div>
+    <div class="kpi"><span>Students on platform</span><b>21,430</b><small class="up">+1,120 vs last term</small></div>
+    <div class="kpi"><span>Digital collections</span><b>GHS 3.24M</b><small class="up">+18% MoM</small></div>
+    <div class="kpi"><span>Payment success rate</span><b>93.1%</b><small class="down">\u2193 0.6 pts (SMS provider issue)</small></div>
+    <div class="kpi"><span>Alerts sent</span><b>412k</b><small>SMS 61% \u00b7 WhatsApp 34% \u00b7 Email 5%</small></div>
+    <div class="kpi"><span>USSD sessions</span><b>88.4k</b><small>Completion 71%</small></div>
+  </div>
+  <div class="two"><div class="card"><h3>Weekly collections (GHS thousands) <span class="sp"></span><span class="chip warn">Term-start peak</span></h3>${bars(vol,['W36','W37','W38','W39','W40','W41','W42','W43'],160,'#0b6b53',4)}</div>
+  <div class="card"><h3>Channel mix</h3><div style="display:flex;align-items:center;gap:20px">${donut([{v:44,c:'#0b6b53'},{v:41,c:'#f2a900'},{v:8,c:'#2a5db0'},{v:7,c:'#9aa9a2'}])}
+    <div class="legend"><span><i style="background:#0b6b53"></i>Web \u00b7 44%</span><span><i style="background:#f2a900"></i>USSD \u00b7 41%</span><span><i style="background:#2a5db0"></i>Pay links \u00b7 8%</span><span><i style="background:#9aa9a2"></i>Card \u00b7 7%</span></div></div></div></div>
+  <div class="two"><div class="card"><h3>Provider health</h3><table class="tbl"><thead><tr><th>Service</th><th>Status</th><th>Latency</th><th>24h success</th></tr></thead><tbody>
+   ${P.providers.map(p=>`<tr><td><b>${p.name}</b><small>${p.type}</small></td><td><span class="chip ${p.status==='Operational'?'ok':p.status==='Degraded'?'warn':'bad'}">${p.status}</span></td><td>${p.lat}</td><td>${p.ok}</td></tr>`).join('')}</tbody></table></div>
+  <div class="card"><h3>Needs attention</h3>
+   <div class="feed"><div class="dot" style="background:var(--warn-l);color:var(--warn)">SMS</div><div class="t"><b>SMS Provider 1 delivery at 91%</b><small>Threshold 95% \u00b7 auto-failover armed</small></div><button class="btn sm ghost" data-go="platform:flow">Trace</button></div>
+   <div class="feed"><div class="dot" style="background:var(--danger-l);color:var(--danger)">REC</div><div class="t"><b>${P.exceptions.length} reconciliation exceptions</b><small>Oldest 31 h \u00b7 holds settlement</small></div><button class="btn sm ghost" data-go="platform:settle">Resolve</button></div>
+   <div class="feed"><div class="dot" style="background:var(--warn-l);color:var(--warn)">\u00a2</div><div class="t"><b>${P.schools.filter(s=>s.wallet<25&&s.status!=='Onboarding').length} schools with low alert wallet</b><small>Receipts/OTP draw from platform allowance</small></div><button class="btn sm ghost" data-go="platform:providers">View</button></div>
+   <div class="feed"><div class="dot" style="background:var(--blue-l);color:var(--blue)">NEW</div><div class="t"><b>2 schools in onboarding</b><small>Osu Presby (4/7) \u00b7 Tamale Unity (5/7)</small></div><button class="btn sm ghost" data-go="platform:schools">Open</button></div>
+  </div></div>`;
+};
+function schoolRows(){
+  const q=ui.schoolQ.toLowerCase(), f=ui.schoolFilter;
+  const rows=D.platform.schools.filter(s=>(f==='all'||s.status===f)&&(s.name+s.city).toLowerCase().includes(q));
+  return rows.length?rows.map(s=>`<tr class="click" data-school="${s.id}"><td><b>${s.name}</b><small>${s.city}</small></td><td>${s.plan}</td><td class="r">${num(s.students)}</td>
+   <td><span class="chip ${s.status==='Live'?'ok':s.status==='Suspended'?'bad':'warn'}">${s.status}</span></td>
+   <td><div class="prog" style="width:90px"><i style="width:${s.stage/7*100}%"></i></div><small>${s.stage}/7 steps</small></td>
+   <td class="r">${s.vol?g0(s.vol):'\u2014'}</td><td class="r"><span style="color:${s.wallet<25&&s.status!=='Onboarding'?'var(--danger)':'inherit'};font-weight:${s.wallet<25?700:400}">GHS ${s.wallet.toFixed(2)}</span></td>
+   <td><span class="chip ${s.inv==='Paid'?'ok':s.inv==='Overdue'?'bad':'neutral'}">${s.inv}</span></td></tr>`).join(''):`<tr><td colspan="8" class="note" style="padding:24px">No schools match.</td></tr>`;
+}
+PAGES.schools=()=>`<div class="head"><div><h1>Schools</h1><div class="sub">Manage tenants, plans and onboarding</div></div><div class="sp"></div><button class="btn" data-act="newSchool">+ New school</button></div>
+  <div class="card"><div class="toolbar"><input class="search" id="sq" placeholder="Search schools or cities\u2026" value="${esc(ui.schoolQ)}">
+   <div class="seg">${['all','Live','Onboarding','Trial','Suspended'].map(f=>`<button class="${ui.schoolFilter===f?'on':''}" data-sf="${f}">${f==='all'?'All':f}</button>`).join('')}</div></div>
+   <div class="scroll"><table class="tbl"><thead><tr><th>School</th><th>Plan</th><th class="r">Students</th><th>Status</th><th>Onboarding</th><th class="r">Collected (term)</th><th class="r">Alert wallet</th><th>SaaS invoice</th></tr></thead><tbody id="srows">${schoolRows()}</tbody></table></div></div>`;
+function schoolDrawer(id){
+  const s=D.platform.schools.find(x=>x.id===id);
+  const steps=['School profile','Classes & subjects','People imported','Fee structures','Payments verified (KYC)','Alerts ready','Go-live'];
+  modal(`<button class="x" data-act="close">\u00d7</button><h2>${s.name}</h2><div class="note">${s.city} \u00b7 ${s.plan} plan \u00b7 ${num(s.students)} students</div>
+   <div style="margin:14px 0"><span class="chip ${s.status==='Live'?'ok':s.status==='Suspended'?'bad':'warn'}">${s.status}</span> <span class="chip neutral">SaaS invoice: ${s.inv}</span></div>
+   <div class="card" style="box-shadow:none;border:1px solid var(--line)"><h3>Onboarding checklist</h3>${steps.map((t,i)=>`<div class="chk"><i class="${i<s.stage?'d':''}">${i<s.stage?'\u2713':i+1}</i>${t}</div>`).join('')}</div>
+   <div class="kv"><span>Collected this term</span><b>${s.vol?g0(s.vol):'\u2014'}</b></div><div class="kv"><span>Alert wallet</span><b>GHS ${s.wallet.toFixed(2)}</b></div>
+   <div class="acts" style="justify-content:flex-start;flex-wrap:wrap">
+    ${s.status==='Suspended'?`<button class="btn" data-act="susp" data-id="${s.id}">Reactivate</button>`:`<button class="btn danger" data-act="susp" data-id="${s.id}">Suspend</button>`}
+    ${s.stage<7?`<button class="btn ghost" data-act="advance" data-id="${s.id}">Mark next step done</button>`:''}
+    <button class="btn line" data-act="impersonate" data-id="${s.id}">Support access\u2026</button></div>
+   <p class="note" style="margin-top:14px">Support access needs the school head's consent, shows a banner to the school, expires automatically and is fully audited.</p>`,true);
+}
+PAGES.settle=()=>{
+  const P=D.platform, pend=P.settle.filter(s=>s.status==='pending');
+  const net=s=>s.gross-s.pfee-s.plat;
+  return `<div class="head"><div><h1>Settlements &amp; reconciliation</h1><div class="sub">Daily payout batches and provider exceptions</div></div><div class="sp"></div>
+   <button class="btn" data-act="approveAll" ${pend.length?'':'disabled'}>Approve all pending (${pend.length})</button></div>
+  <div class="banner ${P.exceptions.length?'warn':'ok'}">${P.exceptions.length?`<b>${P.exceptions.length} open exceptions.</b> Schools with unresolved exceptions are held from payout until cleared.`:'<b>All clear.</b> Every provider transaction is matched to the ledger.'}<span class="sp"></span><span class="chip ok">Ledger check: 48/48 schools balanced</span></div>
+  <div class="card"><h3>Settlement batches</h3><table class="tbl"><thead><tr><th>School</th><th>Period</th><th class="r">Gross</th><th class="r">Provider fee</th><th class="r">Platform fee</th><th class="r">Net to school</th><th>Status</th><th></th></tr></thead><tbody>
+  ${P.settle.map(s=>{const held=P.exceptions.some(e=>e.school===s.school);return `<tr><td><b>${s.school}</b></td><td>${s.period}</td><td class="r">${fm(s.gross,0)}</td><td class="r">\u2212 ${fm(s.pfee,0)}</td><td class="r">\u2212 ${fm(s.plat,0)}</td><td class="r"><b>${fm(net(s),0)}</b></td>
+   <td><span class="chip ${s.status==='paid'?'ok':s.status==='approved'?'blue':'warn'}">${s.status==='pending'?'Pending approval':s.status==='approved'?'Approved \u00b7 paying':'Paid'}</span>${held&&s.status==='pending'?' <span class="chip bad">Held: exception</span>':''}</td>
+   <td class="r">${s.status==='pending'?`<button class="btn sm" data-act="approve" data-id="${s.id}">Approve</button>`:''}</td></tr>`}).join('')}</tbody></table></div>
+  <div class="card"><h3>Reconciliation exceptions</h3>${P.exceptions.length?`<table class="tbl"><thead><tr><th>Type</th><th>School</th><th>Reference</th><th class="r">Amount</th><th>Age</th><th></th></tr></thead><tbody>
+   ${P.exceptions.map(e=>`<tr><td>${e.type}</td><td>${e.school}</td><td><code>${e.ref}</code></td><td class="r">${fm(e.amt)}</td><td><span class="chip ${parseInt(e.age)>24?'bad':'warn'}">${e.age}</span></td><td class="r nowrap"><button class="btn sm ghost" data-act="resolve" data-id="${e.id}">Resolve</button></td></tr>`).join('')}</tbody></table>`:'<div class="note" style="padding:12px 0">No open exceptions</div>'}</div>`;
+};
+PAGES.providers=()=>{
+  const P=D.platform;
+  return `<div class="head"><div><h1>Providers &amp; wallets</h1><div class="sub">Failover priority, health and per-school alert credit</div></div></div>
+  <div class="two"><div class="card"><h3>Integrations</h3><table class="tbl"><thead><tr><th>Provider</th><th>Type</th><th>Status</th><th>Enabled</th><th></th></tr></thead><tbody>
+  ${P.providers.map(p=>`<tr><td><b>${p.name}</b>${p.k===P.smsPrimary?'<small>\u2605 Primary SMS route</small>':''}</td><td>${p.type}</td><td><span class="chip ${p.status==='Operational'?'ok':p.status==='Down'?'bad':'warn'}">${p.status}</span></td>
+   <td><span class="sw ${p.on?'on':''}" data-act="togProv" data-k="${p.k}"></span></td>
+   <td class="r">${p.type==='SMS'&&p.k!==P.smsPrimary?`<button class="btn sm ghost" data-act="failover" data-k="${p.k}">Make primary</button>`:''}</td></tr>`).join('')}</tbody></table></div>
+  <div class="card"><h3>Alert pricing (per message)</h3><table class="tbl"><thead><tr><th>Channel</th><th class="r">Cost</th><th class="r">Price</th><th class="r">Margin</th></tr></thead><tbody>
+   <tr><td>SMS (per segment)</td><td class="r">GHS 0.035</td><td class="r">GHS 0.050</td><td class="r"><span class="chip ok">30%</span></td></tr>
+   <tr><td>WhatsApp utility</td><td class="r">GHS 0.020</td><td class="r">GHS 0.030</td><td class="r"><span class="chip ok">33%</span></td></tr>
+   <tr><td>Email</td><td class="r">GHS 0.001</td><td class="r">Free</td><td class="r"><span class="chip neutral">\u2014</span></td></tr></tbody></table>
+   <p class="note" style="margin-top:12px">Receipts and OTPs draw from a platform-funded allowance when a school's wallet is empty, up to plan limits.</p></div></div>
+  <div class="card"><h3>School alert wallets</h3>${P.schools.filter(s=>s.status!=='Onboarding').map(s=>hbar(s.name.length>16?s.name.slice(0,15)+'\u2026':s.name,s.wallet,500,'GHS '+s.wallet.toFixed(2),s.wallet<25?'#c0392b':'')).join('')}</div>`;
+};
+
+/* ============================================================
+   SCHOOL HEAD / BURSAR
+   ============================================================ */
+function feedItems(){
+  const L=livePays().map(p=>({who:p.cid==='ama'?'Ama Mensah':'Kofi Mensah',ch:p.channel,amt:p.amount,ts:p.ts,live:true,rc:p.receipt}));
+  const M=D.manual.map(m=>({who:D.students[m.sid].name,ch:m.method,amt:m.amount,ts:m.ts,live:true,rc:m.receipt}));
+  return [...L,...M,...D.seedFeed].sort((a,b)=>b.ts-a.ts).slice(0,7);
+}
+const chStyle={USSD:['#fff4d6','#8a6100'],Web:['#e2f3ed','#0b6b53'],Cash:['#eef2f0','#5b6f67'],Bank:['#e6eefb','#2a5db0'],Cheque:['#e6eefb','#2a5db0'],Transfer:['#e6eefb','#2a5db0']};
+PAGES.dash=()=>{
+  const k=school(), rate=pct(k.collected,k.billed), subs=D.subs.filter(s=>s.status==='submitted').length;
+  const out=k.out, aging=[['Not yet due',out-61500*100-31680*100-21000*100,'#9aa9a2'],['1\u201314 days overdue',61500*100,'#f2a900'],['15\u201330 days',31680*100,'#e67e22'],['30+ days',21000*100,'#c0392b']];
+  const absent=D.attSaved?D.attAbsent.length:null;
+  return `<div class="head"><div><h1>Good morning, Mrs. Adjei</h1><div class="sub">GreenHill Academy \u00b7 Term 1, 2026/27 \u00b7 Tuesday 20 Oct</div></div><div class="sp"></div>
+   <button class="btn ghost" data-act="recordPay">+ Record cash / bank payment</button><button class="btn" data-go="school:msg">Send reminders</button></div>
+  ${subs?`<div class="banner warn"><b>${subs} subject result${subs>1?'s':''} waiting for your approval.</b><span class="sp"></span><button class="btn sm" data-go="school:results">Review</button></div>`:''}
+  ${k.liveCount?`<div class="banner ok"><b>Live:</b> ${k.liveCount} payment${k.liveCount>1?'s':''} from the parent app/USSD (${fm(k.liveSum)}) already posted to the ledger.</div>`:''}
+  <div class="kpis">
+   <div class="kpi"><span>Students</span><b>412</b><small>389 guardians \u00b7 92% phones verified</small></div>
+   <div class="kpi"><span>Billed (Term 1)</span><b>${g0(k.billed/100)}</b><small>412 invoices issued</small></div>
+   <div class="kpi"><span>Collected</span><b>${g0(k.collected/100)}</b><small class="up">${rate}% collection rate</small></div>
+   <div class="kpi"><span>Outstanding</span><b>${g0(k.out/100)}</b><small>118 families with a balance</small></div>
+   <div class="kpi"><span>Absent today</span><b>${absent==null?'\u2014':absent+(' of 24 (JHS 2A)')}</b><small>${absent==null?'JHS 2A register not yet taken':'register saved'}</small></div></div>
+  <div class="two"><div class="card"><h3>Collections by channel</h3>
+    ${Object.entries(k.ch).map(([n,v])=>hbar(n,v,Math.max(...Object.values(k.ch)),g0(v/100),n==='USSD'?'#f2a900':n==='Web'?'#0b6b53':n==='Cash'?'#9aa9a2':'#2a5db0')).join('')}
+    <p class="note" style="margin-top:8px">${pct(k.ch.USSD+k.ch.Web,k.collected)}% of fees now collected digitally.</p></div>
+   <div class="card"><h3>Arrears ageing</h3>${aging.map(([l,v,c])=>hbar(l,v,out,g0(v/100),c)).join('')}</div></div>
+  <div class="two"><div class="card"><h3>Payments feed <span class="sp"></span><span class="chip ok">live</span></h3>
+   ${feedItems().map((f,i)=>{const[bg,fg]=chStyle[f.ch]||chStyle.Bank;return `<div class="feed ${f.live&&i===0&&seen<=livePays().length+D.manual.length?'new':''}"><div class="dot" style="background:${bg};color:${fg}">${f.ch.slice(0,4)}</div><div class="t"><b>${f.who}</b><small>${f.rc?f.rc+' \u00b7 ':''}${ago(f.ts)}</small></div><b>${fm(f.amt)}</b></div>`}).join('')}</div>
+   <div class="card"><h3>Alert wallet</h3><div style="font-size:28px;font-weight:800">GHS ${D.wallet.toFixed(2)}</div><div class="note">\u2248 ${num(D.wallet/0.05)} SMS or ${num(D.wallet/0.03)} WhatsApp messages</div>
+    <div style="margin:14px 0"><button class="btn ghost sm" data-act="topup">Top up with MoMo</button></div>
+    <div class="kv"><span>Receipts sent this week</span><b>1,204</b></div><div class="kv"><span>Reminders sent this week</span><b>610</b></div></div></div>`;
+};
+function invRows(){
+  const f=ui.feeFilter,q=ui.feeQ.toLowerCase();
+  const rows=D.students.filter(s=>{const st=stStatus(s)[0];return(f==='all'||(f==='paid'&&st==='Paid')||(f==='part'&&st==='Part paid')||(f==='unpaid'&&st==='Unpaid'))&&(s.name+s.guardian+s.phone).toLowerCase().includes(q);});
+  return rows.length?rows.map(s=>{const[st,c]=stStatus(s);return `<tr><td><span class="avatar">${initials(s.name)}</span><b>${s.name}</b></td><td>${s.guardian}<small>${s.phone}</small></td><td class="r">${fm(s.total,0)}</td><td class="r">${fm(paid(s),0)}</td><td class="r"><b style="color:${bal(s)>0?'var(--danger)':'var(--ok)'}">${fm(bal(s),0)}</b></td><td><span class="chip ${c}">${st}</span></td>
+   <td class="r nowrap">${bal(s)>0?`<button class="btn sm ghost" data-act="recordPay" data-id="${s.id}">Record payment</button> <button class="btn sm line" data-act="remind" data-id="${s.id}">Remind</button>`:`<button class="btn sm line" data-act="receipt" data-id="${s.id}">Receipt</button>`}</td></tr>`}).join(''):'<tr><td colspan="7" class="note" style="padding:22px">No invoices match.</td></tr>';
+}
+PAGES.fees=()=>{
+  const k=school(), inv=D.students, arrears=inv.filter(s=>bal(s)>0);
+  return `<div class="head"><div><h1>Fees &amp; invoices</h1><div class="sub">JHS 2A sample (24 of 412 students) \u00b7 Term 1, 2026/27</div></div><div class="sp"></div>
+   <button class="btn ghost" data-act="remindAll">Remind all arrears (${arrears.length})</button><button class="btn" data-act="recordPay">+ Record payment</button></div>
+  <div class="two eq"><div class="card"><h3>Fee structure \u00b7 JHS 2</h3>${[['Tuition',90000],['PTA levy',10000],['ICT',8000],['Feeding',22000]].map(([n,a])=>`<div class="kv"><span>${n}</span><span>${fm(a)}</span></div>`).join('')}<div class="kv"><b>Total per student</b><b>${fm(130000)}</b></div><p class="note">Due 15 Nov 2026 \u00b7 Late fee: none \u00b7 Installments: 3</p></div>
+   <div class="card"><h3>This class at a glance</h3>${hbar('Paid in full',inv.filter(s=>bal(s)<=0).length,24,inv.filter(s=>bal(s)<=0).length+' students','#1e8e5a')}${hbar('Part paid',inv.filter(s=>paid(s)>0&&bal(s)>0).length,24,inv.filter(s=>paid(s)>0&&bal(s)>0).length+' students','#f2a900')}${hbar('Unpaid',inv.filter(s=>paid(s)===0).length,24,inv.filter(s=>paid(s)===0).length+' students','#c0392b')}</div></div>
+  <div class="card"><div class="toolbar"><input class="search" id="fq" placeholder="Search student, guardian or phone\u2026" value="${esc(ui.feeQ)}"><div class="seg">${[['all','All'],['unpaid','Unpaid'],['part','Part paid'],['paid','Paid']].map(([k,l])=>`<button class="${ui.feeFilter===k?'on':''}" data-ff="${k}">${l}</button>`).join('')}</div></div>
+   <div class="scroll"><table class="tbl"><thead><tr><th>Student</th><th>Guardian</th><th class="r">Invoice</th><th class="r">Paid</th><th class="r">Balance</th><th>Status</th><th></th></tr></thead><tbody id="irows">${invRows()}</tbody></table></div></div>`;
+};
+function freshRecon(){return [
+  {id:1,ref:'MP2610201142',msisdn:'024 555 0101',amt:130000,prov:'Success',ledger:'Posted',done:true,who:'Kwame Asante'},
+  {id:2,ref:'MP2610201139',msisdn:'055 301 9921',amt:130000,prov:'Success',ledger:'Posted',done:true,who:'Papa Acquah'},
+  {id:3,ref:'MP2610201128',msisdn:'020 880 4412',amt:20000,prov:'Success',ledger:'Posted',done:true,who:'Adwoa Frimpong'},
+  {id:4,ref:'MP2610201119',msisdn:'024 774 3098',amt:70000,prov:'Success',ledger:'Posted',done:true,who:'Kojo Baidoo'},
+  {id:5,ref:'MP2610201105',msisdn:'026 119 2230',amt:45000,prov:'Success',ledger:'Missing',done:false,who:null,issue:'Provider success, not in ledger (webhook lost)'},
+  {id:6,ref:'MP2610201098',msisdn:'050 441 7765',amt:30000,prov:'Success',ledger:'Posted \u00b7 GHS 300.00',done:false,who:'Fiifi Amoah',issue:'Amount mismatch: provider 500.00 vs ledger 300.00'},
+  {id:7,ref:'MP2610201077',msisdn:'024 123 4567',amt:10000,prov:'Failed',ledger:'Failed',done:true,who:'Esi Mensah'}];}
+let RECON=freshRecon(), seen=0;
+PAGES.recon=()=>{
+  const open=RECON.filter(r=>!r.done);
+  return `<div class="head"><div><h1>Reconciliation</h1><div class="sub">Provider transactions vs school ledger \u00b7 today</div></div></div>
+  <div class="banner ${open.length?'warn':'ok'}">${open.length?`<b>${open.length} item${open.length>1?'s need':' needs'} review.</b> Unresolved items block tomorrow's settlement for this school.`:'<b>Fully reconciled.</b> Every provider transaction matches the ledger.'}</div>
+  <div class="card"><table class="tbl"><thead><tr><th>Provider ref</th><th>Payer MoMo</th><th class="r">Provider amount</th><th>Provider</th><th>Ledger</th><th>Match</th><th></th></tr></thead><tbody>
+  ${RECON.map(r=>`<tr><td><code>${r.ref}</code>${r.who?`<small>${r.who}</small>`:''}</td><td>${r.msisdn}</td><td class="r">${fm(r.amt)}</td><td><span class="chip ${r.prov==='Success'?'ok':'bad'}">${r.prov}</span></td><td>${r.ledger}</td>
+   <td>${r.done?'<span class="chip ok">\u2713 Matched</span>':`<span class="chip bad">${r.issue}</span>`}</td>
+   <td class="r">${r.done?'':(r.who?`<button class="btn sm" data-act="reconFix" data-id="${r.id}">Correct ledger</button>`:`<button class="btn sm" data-act="reconClaim" data-id="${r.id}">Assign to student</button>`)}</td></tr>`).join('')}</tbody></table></div>`;
+};
+PAGES.results=()=>{
+  const ms=mathsStats(); D.subs.find(s=>s.live).avg=ms.avg; D.subs.find(s=>s.live).note=`${ms.n} of 24 graded`;
+  const st={draft:['Draft','neutral'],submitted:['Awaiting approval','warn'],approved:['Approved','blue'],published:['Published','ok']};
+  const approved=D.subs.filter(s=>s.status==='approved').length;
+  return `<div class="head"><div><h1>Results approval</h1><div class="sub">JHS 2A \u00b7 Term 1, 2026/27 \u00b7 teacher submissions</div></div><div class="sp"></div>
+   <button class="btn" data-act="publish" ${approved?'':'disabled'}>Publish approved (${approved})</button></div>
+  ${D.returned?`<div class="banner info">You returned Mathematics to Mr. Boateng for correction.</div>`:''}
+  <div class="card"><table class="tbl"><thead><tr><th>Subject</th><th>Teacher</th><th class="r">Class avg</th><th class="r">vs last term</th><th>Status</th><th></th></tr></thead><tbody>
+  ${D.subs.map(s=>{const d=s.avg?s.avg-s.prev:0;const flag=Math.abs(d)>=5&&s.status!=='draft';return `<tr><td><b>${s.sub}</b><small>${s.cls}${s.note?' \u00b7 '+s.note:''}</small></td><td>${s.teacher}</td><td class="r">${s.avg?s.avg.toFixed(1):'\u2014'}</td>
+   <td class="r">${s.avg?`<span style="color:${d<0?'var(--danger)':'var(--ok)'};font-weight:700">${d<0?'\u25bc':'\u25b2'} ${Math.abs(d).toFixed(1)}</span>`:'\u2014'} ${flag?'<span class="chip warn">Review</span>':''}</td>
+   <td><span class="chip ${st[s.status][1]}">${st[s.status][0]}</span></td>
+   <td class="r nowrap">${s.status==='submitted'?`<button class="btn sm" data-act="approveSub" data-id="${s.id}">Approve</button> <button class="btn sm line" data-act="returnSub" data-id="${s.id}">Return</button>`:s.status==='approved'?`<button class="btn sm line" data-act="returnSub" data-id="${s.id}">Return</button>`:''}</td></tr>`}).join('')}</tbody></table></div>
+  ${D.publishLog.map(p=>`<div class="banner ok"><div><b>${p.subjects.join(', ')} published.</b> ${p.n} guardians notified: ${p.wa} via WhatsApp, ${p.sms} via SMS \u00b7 est. cost GHS ${p.cost.toFixed(2)}. Report cards generated.</div></div>`).join('')}
+  <p class="note">Results are only visible to parents once published. Corrections after publishing need your approval and notify guardians automatically.</p>`;
+};
+const AUD={all:['All parents',389],jhs2:['JHS 2 parents',42],arrears:['Parents with fee arrears',118],absent:['Parents of students absent today',6],teachers:['All teachers',28]};
+function msgStats(){
+  const m=ui.msg, body=m.body, uc=!/^[\x00-\x7F\u00a3\u20ac\u00a5]*$/.test(body), len=body.length;
+  const segs=len===0?0:len<=(uc?70:160)?1:Math.ceil(len/(uc?67:153));
+  let n=AUD[m.aud][1]; if(m.aud==='absent'&&D.attSaved) n=D.attAbsent.length||0;
+  const {sms,wa,em}=m.ch; let cost=0;
+  if(sms&&wa) cost=n*(0.7*0.03+0.3*segs*0.05); else if(sms) cost=n*segs*0.05; else if(wa) cost=n*0.03;
+  const per=D.students[0]; const prev=body.replace(/\{\{student_first_name\}\}/g,'Ama').replace(/\{\{balance\}\}/g,'GHS 700.00').replace(/\{\{guardian_name\}\}/g,'Mrs. Mensah');
+  return {n,segs,len,uc,cost,prev,any:sms||wa||em};
+}
+PAGES.msg=()=>{
+  const m=ui.msg,S=msgStats(),short=S.cost>D.wallet;
+  return `<div class="head"><div><h1>Messages</h1><div class="sub">Send to parents or teachers \u00b7 SMS, WhatsApp, email with automatic fallback</div></div></div>
+  <div class="two"><div class="card"><h3>Compose</h3>
+   <div class="field"><label>Audience</label><select class="in" id="m-aud">${Object.entries(AUD).map(([k,[l]])=>`<option value="${k}" ${m.aud===k?'selected':''}>${l}</option>`).join('')}</select></div>
+   <div class="field"><label>Template</label><select class="in" id="m-tpl"><option value="">Custom message</option><option value="fee">Fee reminder</option><option value="pta">PTA meeting</option><option value="close">Emergency: school closure</option></select></div>
+   <div class="field"><label>Channels (WhatsApp first, SMS fallback)</label><div style="display:flex;gap:18px">${[['wa','WhatsApp'],['sms','SMS'],['em','Email']].map(([k,l])=>`<label class="chk"><input type="checkbox" data-mch="${k}" ${m.ch[k]?'checked':''}> ${l}</label>`).join('')}</div></div>
+   <div class="field"><label>Message <span style="font-weight:400">\u2014 merge fields: {{student_first_name}}, {{balance}}, {{guardian_name}}</span></label><textarea class="in" id="m-body">${esc(m.body)}</textarea><div class="note" id="m-count" style="margin-top:6px"></div></div>
+   <button class="btn" id="m-send" data-act="sendMsg">Send now</button> <button class="btn line" data-act="schedule">Schedule</button></div>
+  <div><div class="card"><h3>Before you send</h3><div id="m-sum"></div></div>
+   <div class="card"><h3>Preview (SMS)</h3><div id="m-prev" style="background:#eef3f0;border-radius:14px 14px 14px 4px;padding:12px 14px;line-height:1.5;font-size:13.5px"></div></div></div></div>
+  <div id="m-report">${ui.msg.sending?reportHtml():''}</div>
+  <div class="card"><h3>Recent messages</h3><table class="tbl"><thead><tr><th>When</th><th>Audience</th><th>Channels</th><th class="r">Delivered</th><th>Message</th></tr></thead><tbody>${D.msgHistory.map(h=>`<tr><td>${h.when}</td><td>${h.aud}</td><td>${h.ch}</td><td class="r">${h.ok}/${h.n}</td><td class="note">${esc(h.txt.slice(0,70))}${h.txt.length>70?'\u2026':''}</td></tr>`).join('')}</tbody></table></div>`;
+};
+function updateMsg(){
+  const S=msgStats(), short=S.cost>D.wallet;
+  const c=$('#m-count'); if(!c) return;
+  c.textContent=`${S.len} characters \u00b7 ${S.segs} SMS segment${S.segs===1?'':'s'}${S.uc?' (contains special characters \u2014 70 chars/segment)':''}`;
+  $('#m-sum').innerHTML=`<div class="kv"><span>Recipients</span><b>${num(S.n)}</b></div><div class="kv"><span>Estimated cost</span><b>GHS ${S.cost.toFixed(2)}</b></div><div class="kv"><span>Wallet balance</span><b style="color:${short?'var(--danger)':'inherit'}">GHS ${D.wallet.toFixed(2)}</b></div>${short?'<div class="banner bad" style="margin:10px 0 0">Not enough credit. Top up your wallet or reduce the audience.</div>':''}${!S.any?'<div class="banner bad" style="margin:10px 0 0">Choose at least one channel.</div>':''}<p class="note" style="margin-top:10px">Parents who opted out of non-urgent messages are excluded automatically. One message per guardian even if they have several children.</p>`;
+  $('#m-prev').textContent=S.prev||'\u2014';
+  $('#m-send').disabled=short||!S.any||!ui.msg.body.trim()||!!(ui.msg.sending&&ui.msg.sending.step<4);
+}
+function reportHtml(){
+  const r=ui.msg.sending; if(!r) return '';
+  const names=['Queued','Sent','Delivered','Report ready'];
+  return `<div class="card"><h3>Delivery report <span class="sp"></span><span class="chip ${r.step>=3?'ok':'blue'}">${r.step>=3?'Complete':'Sending\u2026'}</span></h3>
+   <div class="steps" style="margin-bottom:14px">${names.map((n,i)=>`<span class="${r.step>i?'d':''}">${n}</span>`).join('')}</div>
+   <div class="prog"><i style="width:${r.p}%"></i></div>
+   <div class="kpis" style="margin:14px 0 0"><div class="kpi"><span>Delivered</span><b>${r.del}</b></div><div class="kpi"><span>Fell back to SMS</span><b>${r.fb}</b></div><div class="kpi"><span>Failed</span><b>${r.fail}</b></div><div class="kpi"><span>Cost</span><b>GHS ${r.cost.toFixed(2)}</b></div></div></div>`;
+}
+const TPL={fee:'Dear parent, a gentle reminder that {{student_first_name}}\'s school fees balance of {{balance}} is due on 15 Nov. Pay on *714# or esmpay.app. Thank you. - GreenHill Academy',pta:'Dear {{guardian_name}}, the PTA meeting is on Saturday 7 Nov at 10:00 in the school hall. Your presence matters. - GreenHill Academy',close:'URGENT: GreenHill Academy is closed tomorrow due to flooding. Classes resume Monday. Please keep {{student_first_name}} safe at home.'};
+
+/* ============================================================
+   TEACHER
+   ============================================================ */
+PAGES.tdash=()=>{
+  const pend=D.insights.filter(i=>i.status==='pending'), ms=mathsStats(), sub=D.subs.find(s=>s.live);
+  return `<div class="head"><div><h1>Good morning, ${teacherName}</h1><div class="sub">Class teacher JHS 2A \u00b7 Mathematics (JHS 1\u20133)</div></div></div>
+  <div class="kpis"><div class="kpi"><span>Students in JHS 2A</span><b>24</b><small>Average attendance ${Math.round(D.students.reduce((a,s)=>a+s.att,0)/24)}%</small></div>
+   <div class="kpi"><span>Maths grading</span><b>${ms.n}/24</b><small>${sub.status==='draft'?'Due Fri 23 Oct':'Submitted'}</small></div>
+   <div class="kpi"><span>Class average (so far)</span><b>${ms.avg.toFixed(1)}</b><small>${ms.below} below pass mark</small></div>
+   <div class="kpi"><span>AI insights to review</span><b>${pend.length}</b><small>Parents only see approved ones</small></div></div>
+  <div class="two"><div class="card"><h3>To do today</h3>
+   <div class="feed"><div class="dot" style="background:${D.attSaved?'var(--ok-l)':'var(--warn-l)'};color:${D.attSaved?'var(--ok)':'var(--warn)'}">${D.attSaved?'\u2713':'!'}</div><div class="t"><b>Take JHS 2A register</b><small>${D.attSaved?'Saved \u00b7 '+D.attAbsent.length+' absent':'Not taken yet'}</small></div>${D.attSaved?'':'<button class="btn sm" data-go="teacher:attend">Open</button>'}</div>
+   <div class="feed"><div class="dot" style="background:${sub.status==='draft'?'var(--warn-l)':'var(--ok-l)'};color:${sub.status==='draft'?'var(--warn)':'var(--ok)'}">${sub.status==='draft'?'!':'\u2713'}</div><div class="t"><b>Finish Mathematics grades</b><small>${sub.status==='draft'?(D.returned?'Returned by Head \u2014 please recheck exam marks':'Draft \u2014 '+(24-ms.n)+' scores missing'):'Submitted to Head'}</small></div>${sub.status==='draft'?'<button class="btn sm" data-go="teacher:grades">Open</button>':''}</div>
+   <div class="feed"><div class="dot" style="background:var(--blue-l);color:var(--blue)">AI</div><div class="t"><b>Review ${pend.length} progress insight${pend.length===1?'':'s'}</b><small>Approve, edit or dismiss</small></div></div></div>
+  <div class="card"><h3>Today's timetable</h3>${[['08:00','JHS 2A \u00b7 Mathematics','Room 4'],['10:30','JHS 1B \u00b7 Mathematics','Room 2'],['13:00','JHS 3A \u00b7 Mathematics','Room 6']].map(([t,c,r])=>`<div class="kv"><span><b>${t}</b> &nbsp; ${c}</span><span class="note">${r}</span></div>`).join('')}</div></div>
+  <div class="card"><h3>AI progress insights \u2014 review queue <span class="sp"></span><span class="chip blue">Teacher in the loop</span></h3>
+   <p class="note" style="margin-bottom:14px">AI drafts are generated from recorded grades and attendance only. Nothing reaches a parent until you approve it.</p>
+   ${D.insights.map(i=>insightCard(i)).join('')}</div>`;
+};
+function insightCard(i){
+  const s=D.students[i.sid], ty={decline:['Declining','bad'],attendance:['Attendance','warn'],praise:['Praise','ok'],risk:['At-risk (teacher only)','blue']}[i.type];
+  const done=i.status!=='pending';
+  return `<div class="insight ${done?'done':''}"><div class="hd"><span class="avatar">${initials(s.name)}</span><b>${s.name}</b><span class="chip ${ty[1]}">${ty[0]}</span>${i.vis==='teacher'?'<span class="chip neutral">Not sent to parents</span>':''}${done?`<span class="chip ${i.status==='approved'?'ok':'neutral'}">${i.status==='approved'?'Approved \u2014 in weekly digest':i.status==='ack'?'Acknowledged':'Dismissed'}</span>`:''}</div>
+   <p>${esc(i.text)}</p><div class="ev"><b>Why:</b> ${i.ev}</div>
+   ${done?'':`<div class="acts">${i.vis==='parent'?`<button class="btn sm" data-act="insApprove" data-id="${i.id}">Approve &amp; send to parent</button><button class="btn sm line" data-act="insEdit" data-id="${i.id}">Edit</button>`:`<button class="btn sm" data-act="insAck" data-id="${i.id}">Create support plan</button>`}<button class="btn sm line" data-act="insDismiss" data-id="${i.id}">Dismiss</button></div>`}</div>`;
+}
+PAGES.grades=()=>{
+  const sub=D.subs.find(s=>s.live), lock=sub.status!=='draft', ms=mathsStats();
+  return `<div class="head"><div><h1>Gradebook \u00b7 Mathematics</h1><div class="sub">JHS 2A \u00b7 Term 1, 2026/27 \u00b7 Class Test 1 (20) + Class Test 2 (20) + Exam (60) = 100</div></div><div class="sp"></div>
+   <span class="chip ${lock?'warn':'neutral'}">${lock?(sub.status==='submitted'?'Submitted \u2014 awaiting Head':sub.status==='approved'?'Approved':'Published'):'Draft'}</span>
+   <button class="btn line" data-act="csv" ${lock?'disabled':''}>Import CSV</button><button class="btn" data-act="submitGrades" ${lock?'disabled':''}>Submit to Head</button></div>
+  ${D.returned&&!lock?`<div class="banner info"><b>Returned by Head:</b> please recheck exam marks before resubmitting.</div>`:''}
+  <div class="banner info"><span>Tip: type a score and press <b>Enter</b> or <b>\u2193</b> to move down. Scores above the maximum are flagged instantly.</span></div>
+  <div id="gstats" class="kpis">${gstatsHtml(ms)}</div>
+  <div class="card"><div class="scroll"><table class="tbl"><thead><tr><th>#</th><th>Student</th><th>Test 1 /20</th><th>Test 2 /20</th><th>Exam /60</th><th class="r">Total /100</th><th>Grade</th></tr></thead><tbody>
+  ${D.students.map((s,i)=>`<tr><td class="note">${i+1}</td><td><b>${s.name}</b></td>
+    ${[['t1',20],['t2',20],['ex',60]].map(([c,mx])=>`<td><input class="cell ${s.sc[c]!=null&&s.sc[c]>mx?'bad':''}" data-r="${i}" data-c="${c}" data-max="${mx}" inputmode="decimal" value="${s.sc[c]??''}" ${lock?'disabled':''}></td>`).join('')}
+    <td class="r" id="tot-${i}"><b>${tot(s)??'\u2014'}</b></td><td id="gr-${i}">${tot(s)==null?'':`<span class="chip ${gcls(tot(s))}">${grade(tot(s))}</span>`}</td></tr>`).join('')}</tbody></table></div></div>`;
+};
+function gstatsHtml(ms){return `<div class="kpi"><span>Graded</span><b>${ms.n}/24</b></div><div class="kpi"><span>Class average</span><b>${ms.n?ms.avg.toFixed(1):'\u2014'}</b></div><div class="kpi"><span>Highest / lowest</span><b>${ms.n?ms.hi+' / '+ms.lo:'\u2014'}</b></div><div class="kpi"><span>Below pass (50)</span><b style="color:${ms.below?'var(--danger)':'inherit'}">${ms.below}</b></div>`;}
+function onCell(el){
+  const r=+el.dataset.r,c=el.dataset.c,mx=+el.dataset.max,v=el.value.trim();
+  const n=v===''?null:Number(v), bad=v!==''&&(isNaN(n)||n<0||n>mx);
+  el.classList.toggle('bad',bad); D.students[r].sc[c]=bad?null:n;
+  const t=tot(D.students[r]); $('#tot-'+r).innerHTML=`<b>${t??'\u2014'}</b>`; $('#gr-'+r).innerHTML=t==null?'':`<span class="chip ${gcls(t)}">${grade(t)}</span>`;
+  $('#gstats').innerHTML=gstatsHtml(mathsStats());
+}
+PAGES.attend=()=>{
+  return `<div class="head"><div><h1>Attendance \u00b7 JHS 2A</h1><div class="sub">Tuesday 20 Oct 2026 \u00b7 Morning register</div></div><div class="sp"></div>
+   <button class="btn line" data-act="allP" ${D.attSaved?'disabled':''}>Mark all present</button><button class="btn" data-act="saveAtt" ${D.attSaved?'disabled':''}>${D.attSaved?'Saved \u2713':'Save register'}</button></div>
+  ${D.attSaved?`<div class="banner ok"><div><b>Register saved.</b> ${D.attAbsent.length?`${D.attAbsent.length} absence alert${D.attAbsent.length>1?'s':''} queued: ${D.attAbsent.map(s=>s.name.split(' ')[0]).join(', ')}.`:'No absences today.'}${D.attAbsent.some(s=>s.streak>=2)?` <b>${D.attAbsent.filter(s=>s.streak>=2).map(s=>s.name.split(' ')[0]).join(', ')}</b> reached 3 consecutive absences \u2014 class teacher and school admin have also been alerted.`:''}</div></div>`:''}
+  <div class="card"><table class="tbl"><thead><tr><th>#</th><th>Student</th><th>Prior streak</th><th>Today</th></tr></thead><tbody>
+  ${D.students.map((s,i)=>`<tr><td class="note">${i+1}</td><td><b>${s.name}</b></td><td>${s.streak?`<span class="chip warn">${s.streak} days absent</span>`:'<span class="note">\u2014</span>'}</td>
+   <td><div class="pa">${[['p','Present'],['a','Absent'],['l','Late']].map(([k,l])=>`<button class="${k} ${s.att_today===k.toUpperCase()?'on':''}" data-att="${i}:${k.toUpperCase()}" ${D.attSaved?'disabled':''}>${l}</button>`).join('')}</div></td></tr>`).join('')}</tbody></table></div>`;
+};
+PAGES.klass=()=>`<div class="head"><div><h1>My class \u00b7 JHS 2A</h1><div class="sub">Student information for your assigned class</div></div></div>
+  <div class="banner info">Fee and payment details are hidden for teachers. Guardian contacts are visible for school business only.</div>
+  <div class="card"><table class="tbl"><thead><tr><th>Student</th><th>Guardian</th><th class="r">Maths</th><th class="r">Attendance</th><th>Flags</th></tr></thead><tbody>
+  ${D.students.map(s=>{const t=tot(s),fl=[];if(s.att<85)fl.push('<span class="chip warn">Attendance</span>');if(t!=null&&t<pass)fl.push('<span class="chip bad">Below pass</span>');if(s.id===0)fl.push('<span class="chip bad">Maths decline</span>');
+   return `<tr class="click" data-stu="${s.id}"><td><span class="avatar">${initials(s.name)}</span><b>${s.name}</b></td><td>${s.guardian}<small>${s.phone}</small></td><td class="r">${t??'\u2014'}</td><td class="r">${s.att}%</td><td>${fl.join(' ')||'<span class="note">\u2014</span>'}</td></tr>`}).join('')}</tbody></table></div>`;
+function stuDrawer(id){
+  const s=D.students[id],t=tot(s);
+  modal(`<button class="x" data-act="close">\u00d7</button><h2><span class="avatar" style="width:44px;height:44px">${initials(s.name)}</span>${s.name}</h2><div class="note" style="margin:6px 0 16px">JHS 2A \u00b7 Student ID GHA-${String(231+id).padStart(4,'0')}</div>
+   <div class="kv"><span>Guardian</span><b>${s.guardian}</b></div><div class="kv"><span>Phone</span><b>${s.phone}</b></div><div class="kv"><span>Preferred channel</span><b>${s.wa?'WhatsApp':'SMS'}</b></div>
+   <div class="kv"><span>Maths total</span><b>${t??'\u2014'} ${t!=null?`<span class="chip ${gcls(t)}">${grade(t)}</span>`:''}</b></div><div class="kv"><span>Attendance</span><b>${s.att}%</b></div>
+   <h3 style="margin:18px 0 8px;font-size:14px">Teacher notes</h3>${s.notes.length?s.notes.map(n=>`<div class="insight" style="padding:10px 12px;margin-bottom:8px"><small class="note">Today \u00b7 ${n.vis}</small><div>${esc(n.t)}</div></div>`).join(''):'<div class="note">No notes yet.</div>'}
+   <div class="field" style="margin-top:12px"><textarea class="in" id="nt" placeholder="Add a note\u2026" style="min-height:70px"></textarea></div>
+   <div class="acts" style="justify-content:space-between"><label class="chk"><input type="checkbox" id="nvis"> Share with guardian</label><button class="btn" data-act="addNote" data-id="${id}">Save note</button></div>`,true);
+}
+
+/* ============================================================
+   Event handling
+   ============================================================ */
+function after(){
+  const sq=$('#sq'); if(sq) sq.oninput=()=>{ui.schoolQ=sq.value;$('#srows').innerHTML=schoolRows();};
+  const fq=$('#fq'); if(fq) fq.oninput=()=>{ui.feeQ=fq.value;$('#irows').innerHTML=invRows();};
+  const a=$('#m-aud'); if(a){ a.onchange=()=>{ui.msg.aud=a.value;if(a.value==='teachers'){ui.msg.ch={sms:false,wa:true,em:true};ui.msg.body='Dear colleagues, staff meeting is moved to 2pm on Friday in the staff room. - Head';}render();};
+    $('#m-tpl').onchange=e=>{if(e.target.value){ui.msg.body=TPL[e.target.value];if(e.target.value==='close'){ui.msg.ch={sms:true,wa:true,em:true};}render();}};
+    $('#m-body').oninput=e=>{ui.msg.body=e.target.value;updateMsg();}; updateMsg(); }
+  seen=livePays().length+D.manual.length;
+  if(ui.page==='flow'&&window.flowStart) flowStart();
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-role],[data-page],[data-go],[data-act],[data-sf],[data-ff],[data-school],[data-stu],[data-att],[data-mch]'); if(!t) return;
+  const d=t.dataset;
+  if(d.role) return setRole(d.role);
+  if(d.page){ui.page=d.page;render();return window.scrollTo(0,0);}
+  if(d.go){const[r,p]=d.go.split(':');ui.role=r;ui.page=p;render();return window.scrollTo(0,0);}
+  if(d.sf){ui.schoolFilter=d.sf;return render();}
+  if(d.ff){ui.feeFilter=d.ff;return render();}
+  if(d.school) return schoolDrawer(+d.school);
+  if(d.stu) return stuDrawer(+d.stu);
+  if(d.att){const[i,v]=d.att.split(':');D.students[+i].att_today=v;return render();}
+  if(d.mch){ui.msg.ch[d.mch]=t.checked;return updateMsg();}
+  if(d.act) act(d.act,d,t);
+});
+const P=()=>D.platform;
+function act(a,d,el){
+  const id=+d.id;
+  switch(a){
+   case 'close': return closeOv();
+   case 'newSchool': return modal(`<button class="x" data-act="close">\u00d7</button><h2>New school</h2><p class="note" style="margin-bottom:16px">Creates the tenant and emails the head a setup link.</p>
+      <div class="field"><label>School name</label><input class="in" id="ns-name" placeholder="e.g. Hillcrest International"></div><div class="field"><label>City</label><input class="in" id="ns-city" placeholder="Accra"></div>
+      <div class="field"><label>Plan</label><select class="in" id="ns-plan"><option>Starter</option><option selected>Growth</option><option>Pro</option></select></div>
+      <div class="field"><label>Head's phone (for setup link)</label><input class="in" value="024 000 0000"></div>
+      <div class="acts"><button class="btn line" data-act="close">Cancel</button><button class="btn" data-act="createSchool">Create school</button></div>`);
+   case 'createSchool':{const n=$('#ns-name').value.trim(); if(!n) return toast('Enter a school name');
+      P().schools.unshift({id:Date.now(),name:n,city:$('#ns-city').value||'\u2014',plan:$('#ns-plan').value,students:0,status:'Onboarding',stage:1,vol:0,wallet:0,inv:'Trial'});closeOv();ui.page='schools';render();return toast(`${n} created \u2014 setup link sent to the head`);}
+   case 'susp':{const s=P().schools.find(x=>x.id===id);s.status=s.status==='Suspended'?'Live':'Suspended';closeOv();render();return toast(`${s.name} ${s.status==='Live'?'reactivated':'suspended \u2014 users see a billing notice'}`);}
+   case 'advance':{const s=P().schools.find(x=>x.id===id);s.stage=Math.min(7,s.stage+1);if(s.stage===7)s.status='Live';render();return schoolDrawer(id);}
+   case 'impersonate': return toast('Consent request sent to the school head (expires in 30 min)');
+   case 'approve':{P().settle.find(s=>s.id===id).status='approved';render();return toast('Settlement approved \u2014 payout initiated');}
+   case 'approveAll':{P().settle.forEach(s=>{if(s.status==='pending'&&!P().exceptions.some(e=>e.school===s.school))s.status='approved';});render();return toast('Approved all batches without exceptions; held batches remain');}
+   case 'resolve':{const e=P().exceptions.find(x=>x.id===id);P().exceptions=P().exceptions.filter(x=>x.id!==id);render();return toast(`Resolved ${e.ref} \u2014 payment ${e.type.startsWith('Provider')?'claimed and posted':'adjusted'}`);}
+   case 'togProv':{const p=P().providers.find(x=>x.k===d.k);p.on=!p.on;render();return toast(`${p.name} ${p.on?'enabled':'disabled'}`);}
+   case 'failover':{P().smsPrimary=d.k;window.flowSync&&flowSync();render();return toast('SMS traffic now routed via '+P().providers.find(x=>x.k===d.k).name);}
+   case 'recordPay':{const sid=d.id!==undefined?id:null;
+      return modal(`<button class="x" data-act="close">\u00d7</button><h2>Record payment</h2><p class="note" style="margin-bottom:16px">Cash, bank or cheque received at the bursar's office. A receipt is generated and the guardian is notified.</p>
+      <div class="field"><label>Student</label><select class="in" id="rp-s">${D.students.filter(s=>bal(s)>0).map(s=>`<option value="${s.id}" ${s.id===sid?'selected':''}>${s.name} \u2014 owes ${fm(bal(s),0)}</option>`).join('')}</select></div>
+      <div class="field"><label>Amount (GHS)</label><input class="in" id="rp-a" inputmode="decimal" value="100.00"></div>
+      <div class="field"><label>Method</label><select class="in" id="rp-m"><option>Cash</option><option>Bank</option><option>Cheque</option></select></div>
+      <div class="field"><label>Reference (slip / cheque no.)</label><input class="in" id="rp-r" placeholder="optional"></div>
+      <div class="acts"><button class="btn line" data-act="close">Cancel</button><button class="btn" data-act="savePay">Post payment</button></div>`);}
+   case 'savePay':{const sid=+$('#rp-s').value,amt=Math.round(parseFloat($('#rp-a').value)*100),s=D.students[sid];
+      if(!(amt>0)) return toast('Enter a valid amount'); if(amt>bal(s)) return toast(`Amount exceeds balance (${fm(bal(s))})`);
+      const rc='GHA-R-'+String(D.receiptNo++).padStart(6,'0'); D.manual.push({sid,amount:amt,method:$('#rp-m').value,ref:$('#rp-r').value,receipt:rc,ts:Date.now()});
+      closeOv();render();return toast(`${rc} posted \u00b7 receipt sent to ${s.guardian} (${s.phone})`);}
+   case 'remind': return toast(`Reminder queued for ${D.students[id].guardian} via ${D.students[id].wa?'WhatsApp (SMS fallback)':'SMS'}`);
+   case 'remindAll': return toast(`${D.students.filter(s=>bal(s)>0).length} reminders queued \u00b7 est. GHS ${(D.students.filter(s=>bal(s)>0).length*0.04).toFixed(2)}`);
+   case 'receipt': return toast('Receipt PDF downloaded (demo)');
+   case 'topup': return toast('MoMo prompt sent \u2014 wallet credited on approval (demo)');
+   case 'reconFix':{const r=RECON.find(x=>x.id===id);r.done=true;r.ledger='Corrected \u00b7 '+fm(r.amt);P().exceptions=P().exceptions.filter(e=>e.ref!==r.ref);render();return toast('Ledger corrected via reversing entry + new posting (audited)');}
+   case 'reconClaim':{const r=RECON.find(x=>x.id===id);r.done=true;r.who='Selorm Agbeko';r.ledger='Posted (claimed)';render();return toast('Payment assigned to Selorm Agbeko \u00b7 receipt sent');}
+   case 'approveSub':{D.subs.find(s=>s.id===id).status='approved';render();return toast('Approved');}
+   case 'returnSub':{const s=D.subs.find(x=>x.id===id);s.status='draft';if(s.live)D.returned=true;render();return toast(`${s.sub} returned to ${s.teacher}`);}
+   case 'publish':{const ap=D.subs.filter(s=>s.status==='approved');ap.forEach(s=>s.status='published');
+      const wa=D.students.filter(s=>s.wa).length,sms=24-wa;D.publishLog.push({subjects:ap.map(s=>s.sub),n:24,wa,sms,cost:wa*0.03+sms*0.05});render();return toast('Published \u00b7 guardians are being notified');}
+   case 'sendMsg':{const S=msgStats();ui.msg.sending={step:0,p:0,del:0,fb:0,fail:0,cost:0};render();
+      const tot=S.n,fb=Math.round(tot*0.05),fail=Math.round(tot*0.02);let tick=0;
+      const iv=setInterval(()=>{tick++;const r=ui.msg.sending;r.p=Math.min(100,tick*12);r.step=tick<2?0:tick<4?1:tick<8?2:3;r.del=Math.min(tot-fail,Math.round(tot*tick*0.125));r.fb=Math.min(fb,Math.round(fb*tick/8));r.fail=Math.min(fail,Math.round(fail*tick/8));r.cost=S.cost*Math.min(1,tick/8);
+        const m=$('#m-report'); if(m) m.innerHTML=reportHtml(); updateMsg();
+        if(tick>=8){clearInterval(iv);r.step=4;r.p=100;r.del=tot-fail;D.wallet=Math.max(0,D.wallet-S.cost);D.msgHistory.unshift({when:'Just now',aud:AUD[ui.msg.aud][0],ch:Object.entries(ui.msg.ch).filter(x=>x[1]).map(x=>({wa:'WhatsApp',sms:'SMS',em:'Email'}[x[0]])).join(' + '),n:tot,ok:tot-fail,txt:ui.msg.body});if(ui.page==='msg')render();toast(`Sent to ${tot-fail} of ${tot} recipients`);}},400);return;}
+   case 'schedule': return toast('Scheduled for tomorrow 07:30 (demo)');
+   case 'csv': return toast('CSV import: 24 rows validated, 0 errors (demo)');
+   case 'submitGrades':{const miss=D.students.filter(s=>tot(s)==null);
+      if(miss.length) return modal(`<button class="x" data-act="close">\u00d7</button><h2>Can't submit yet</h2><p class="note" style="margin:6px 0 14px">These students have missing or invalid scores:</p>${miss.map(s=>`<div class="kv"><span>${s.name}</span><span class="chip bad">${[['t1','Test 1'],['t2','Test 2'],['ex','Exam']].filter(([c])=>s.sc[c]==null).map(x=>x[1]).join(', ')}</span></div>`).join('')}<div class="acts"><button class="btn" data-act="close">Fix scores</button></div>`);
+      D.subs.find(s=>s.live).status='submitted';D.returned=false;render();return toast('Submitted \u2014 Head has been notified. Gradebook is now locked.');}
+   case 'allP':{D.students.forEach(s=>s.att_today='P');return render();}
+   case 'saveAtt':{D.attAbsent=D.students.filter(s=>s.att_today==='A');D.attSaved=true;render();return toast('Register saved \u00b7 absence alerts queued');}
+   case 'insApprove':{D.insights.find(i=>i.id===id).status='approved';render();return toast('Approved \u2014 included in the guardian\u2019s weekly digest');}
+   case 'insDismiss':{D.insights.find(i=>i.id===id).status='dismissed';render();return toast('Dismissed \u2014 feedback recorded to improve insights');}
+   case 'insAck':{D.insights.find(i=>i.id===id).status='ack';render();return toast('Support plan drafted (teacher-only)');}
+   case 'insEdit':{const i=D.insights.find(x=>x.id===id);return modal(`<button class="x" data-act="close">\u00d7</button><h2>Edit message to parent</h2><p class="note" style="margin-bottom:12px">Your edit is what the parent will see.</p><textarea class="in" id="ie">${esc(i.text)}</textarea><div class="acts"><button class="btn line" data-act="close">Cancel</button><button class="btn" data-act="insSave" data-id="${id}">Save &amp; approve</button></div>`);}
+   case 'insSave':{const i=D.insights.find(x=>x.id===id);i.text=$('#ie').value;i.status='approved';closeOv();render();return toast('Edited and approved');}
+   case 'addNote':{const t=$('#nt').value.trim();if(!t)return;D.students[id].notes.unshift({t,vis:$('#nvis').checked?'shared with guardian':'private'});stuDrawer(id);return toast('Note saved');}
+  }
+}
+document.addEventListener('input',e=>{if(e.target.classList.contains('cell'))onCell(e.target);});
+document.addEventListener('keydown',e=>{
+  const el=e.target; if(!el.classList||!el.classList.contains('cell')) return;
+  const r=+el.dataset.r,c=el.dataset.c;
+  if(e.key==='Enter'||e.key==='ArrowDown'){e.preventDefault();const n=$(`.cell[data-r="${r+1}"][data-c="${c}"]`);if(n){n.focus();n.select();}}
+  if(e.key==='ArrowUp'){e.preventDefault();const n=$(`.cell[data-r="${r-1}"][data-c="${c}"]`);if(n){n.focus();n.select();}}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeOv();});
+
+
+/* command palette */
+function openPalette(){
+  const items=[];Object.entries(ROLES).forEach(([r,R])=>R.pages.forEach(([k,l,ic])=>items.push({r,k,l,ic,rl:R.label})));
+  modal(`<div class="palette"><input id="pq" placeholder="Jump to a page or role\u2026" autocomplete="off"><div class="res" id="pres"></div></div>`);
+  $('#ov .modal').className='modal palette'; $('#ov .modal').innerHTML=`<input id="pq" placeholder="Jump to a page or role\u2026" autocomplete="off"><div class="res" id="pres"></div>`;
+  let sel=0,list=items;
+  const draw=()=>{$('#pres').innerHTML=list.map((i,n)=>`<div class="it ${n===sel?'on':''}" data-pi="${n}">${icon(i.ic)}${i.l}<small>${i.rl}</small></div>`).join('')||'<div class="note" style="padding:14px">No matches</div>';};
+  const go2=n=>{const i=list[n];if(!i)return;closeOv();ui.role=i.r;ui.page=i.k;render();window.scrollTo(0,0);};
+  draw(); $('#pq').focus();
+  $('#pq').oninput=e=>{const q=e.target.value.toLowerCase();list=items.filter(i=>(i.l+' '+i.rl).toLowerCase().includes(q));sel=0;draw();};
+  $('#pq').onkeydown=e=>{if(e.key==='ArrowDown'){sel=Math.min(list.length-1,sel+1);draw();e.preventDefault();}if(e.key==='ArrowUp'){sel=Math.max(0,sel-1);draw();e.preventDefault();}if(e.key==='Enter')go2(sel);};
+  $('#pres').onclick=e=>{const it=e.target.closest('[data-pi]');if(it)go2(+it.dataset.pi);};
+}
+$('#cmdk').onclick=openPalette;
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openPalette();}});
+
+/* live updates from the parent demo */
+let lastLive=livePays().length;
+setInterval(()=>{
+  const n=livePays().length;
+  if(n!==lastLive){const added=n>lastLive;lastLive=n;
+    if(added){const p=livePays()[n-1];toast(`New payment: ${fm(p.amount)} for ${p.cid==='ama'?'Ama':'Kofi'} via ${p.channel}`);}
+    const ae=document.activeElement; if(ui.page!=='flow'&&!(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'))&&!$('#ov').classList.contains('show')) render();}
+},1200);
+
+/* boot (supports #role=teacher&page=grades) */
+</script>
+<script src="assets/revenue.js"></script>
+<script src="assets/flow.js"></script>
+<script>
+(function boot(){const h=location.hash;const r=h.match(/role=(\w+)/),p=h.match(/page=(\w+)/);
+  if(r&&ROLES[r[1]]){ui.role=r[1];ui.page=ROLES[r[1]].pages[0][0];} if(p&&PAGES[p[1]]) ui.page=p[1]; render();})();
+</script>
+</body>
+</html>
